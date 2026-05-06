@@ -49,12 +49,15 @@ async def action_executor(state: ModerationState) -> dict:
     # Human review queue: grey zone → human moderator
     if decision == "review":
         review_id = review_queue.enqueue({
+            "case_id": state.get("case_id") or state.get("content_id", "?"),
+            "trace_id": state.get("trace_id", ""),
             "content_id": state.get("content_id", "?"),
             "text": state.get("text", ""),
             "image_url": state.get("image_url", ""),
             "ai_decision": decision,
             "ai_confidence": state.get("confidence", 0.0),
             "ai_reason": state.get("reason", ""),
+            "risk_type": state.get("risk_type", "other"),
             "signals": {
                 "text_result": state.get("text_result"),
                 "image_result": state.get("image_result"),
@@ -77,6 +80,8 @@ async def action_executor(state: ModerationState) -> dict:
     # Record event for offline feedback loop (non-blocking)
     try:
         event_collector.record({
+            "case_id": state.get("case_id") or state.get("content_id", "?"),
+            "trace_id": state.get("trace_id", ""),
             "content_id": state.get("content_id", "?"),
             "text": state.get("text", ""),
             "image_url": state.get("image_url", ""),

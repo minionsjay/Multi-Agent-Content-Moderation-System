@@ -4,12 +4,20 @@ from operator import add
 
 class ModerationState(TypedDict, total=False):
     # Original input
+    case_id: str
+    trace_id: str
     content_id: str
     text: str
     image_url: str
     image_base64: str
     user_id: str
     source: str
+    country: str
+    language: str
+    domain: str
+    customer_type: str
+    risk_type: str
+    algorithm_score: float
 
     # Triage / Gateway outputs
     content_type: str

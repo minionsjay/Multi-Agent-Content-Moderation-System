@@ -43,7 +43,12 @@ def check_dotenv():
 
 def check_deepseek_key():
     key = os.getenv("DEEPSEEK_API_KEY")
-    if not key:
+    placeholder_values = {
+        "sk-your-deepseek-key-here",
+        "your-deepseek-key",
+        "your-api-key",
+    }
+    if not key or key.strip() in placeholder_values:
         print("[WARN] DEEPSEEK_API_KEY not set — LLM audit will fail")
     else:
         print(f"[OK] DeepSeek key set ({key[:8]}...)")

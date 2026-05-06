@@ -3,7 +3,7 @@ import logging
 from src.config import (
     LLM_PROVIDER,
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
-    OPENAI_API_KEY, OPENAI_BASE_URL,
+    OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL,
     ANTHROPIC_API_KEY,
 )
 
@@ -117,8 +117,7 @@ class LLMAuditor:
         if self.provider == "deepseek":
             return DEEPSEEK_MODEL
         elif self.provider == "openai":
-            from src.config import OPENAI_MODEL
-            return os.getenv("OPENAI_MODEL", "gpt-4o-mini") if "OPENAI_MODEL" not in dir() else "gpt-4o-mini"
+            return OPENAI_MODEL
         else:
             return "claude-3-5-haiku-latest"
 
