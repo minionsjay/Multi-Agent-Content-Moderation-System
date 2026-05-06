@@ -163,6 +163,9 @@ python -m src.feedback.train_lora
 | [ANALYSIS.md](ANALYSIS.md) | 逐层技术分析 + Bug 修复记录 |
 | [OVERVIEW.md](OVERVIEW.md) | 技术总览 + 模块清单 |
 | [OFFLINE_DEPLOY.md](OFFLINE_DEPLOY.md) | 离线部署指南 |
+| [PROTOTYPE_SPEC_INDEX.md](PROTOTYPE_SPEC_INDEX.md) | 内容安全风控 Agent Prototype 的 Spec 执行入口 |
+| [SDD_PROTOTYPE_DEVELOPMENT_PLAN.md](SDD_PROTOTYPE_DEVELOPMENT_PLAN.md) | Prototype 的 SDD 背景与详细规格说明，非直接执行入口 |
+| [AGENTS.md](AGENTS.md) | Coding Agent 项目规则 |
 | [research/LOCAL_LLM_GUIDE.md](research/LOCAL_LLM_GUIDE.md) | 本地大模型接入指南 |
 | [research/README.md](research/README.md) | 优化方案索引 |
 
