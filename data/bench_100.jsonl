@@ -1,0 +1,101 @@
+{"id": "test_000", "text": "这个手机壳挺好看的", "expected": "safe"}
+{"id": "test_001", "text": "老子弄死你信不信", "expected": "unsafe"}
+{"id": "test_002", "text": "the sunset looks amazing", "expected": "safe"}
+{"id": "test_003", "text": "弄死你信不信", "expected": "unsafe"}
+{"id": "test_004", "text": "this tutorial is very helpful", "expected": "safe"}
+{"id": "test_005", "text": "I love programming in Python", "expected": "safe"}
+{"id": "test_006", "text": "great job on the project", "expected": "safe"}
+{"id": "test_007", "text": "这游戏打得我想骂人", "expected": "unsafe"}
+{"id": "test_008", "text": "脑残才买这个东西", "expected": "unsafe"}
+{"id": "test_009", "text": "请问最近的医院怎么走", "expected": "safe"}
+{"id": "test_010", "text": "今天天气真好适合出去玩", "expected": "safe"}
+{"id": "test_011", "text": "听了一场很棒的讲座", "expected": "safe"}
+{"id": "test_012", "text": "狗屁不通的文章", "expected": "unsafe"}
+{"id": "test_013", "text": "帮我拿一下快递谢谢", "expected": "safe"}
+{"id": "test_014", "text": "操你妈的敢惹我", "expected": "unsafe"}
+{"id": "test_015", "text": "谢谢大家的支持我会继续努力", "expected": "safe"}
+{"id": "test_016", "text": "港独是香港唯一的出路", "expected": "unsafe"}
+{"id": "test_017", "text": "新买的书到了很开心", "expected": "safe"}
+{"id": "test_018", "text": "the weather is beautiful today", "expected": "safe"}
+{"id": "test_019", "text": "盘口已开快来下注", "expected": "unsafe"}
+{"id": "test_020", "text": "赌博网站推荐给大家", "expected": "unsafe"}
+{"id": "test_021", "text": "买到了心仪已久的键盘", "expected": "safe"}
+{"id": "test_022", "text": "cnm听见没", "expected": "unsafe"}
+{"id": "test_023", "text": "i hope you find peace", "expected": "unsafe"}
+{"id": "test_024", "text": "加我微信看片", "expected": "unsafe"}
+{"id": "test_025", "text": "地铁上人好多啊", "expected": "safe"}
+{"id": "test_026", "text": "周末去哪里玩比较好", "expected": "safe"}
+{"id": "test_027", "text": "运动完感觉整个人都精神了", "expected": "safe"}
+{"id": "test_028", "text": "you are pathetic", "expected": "unsafe"}
+{"id": "test_029", "text": "去死吧你", "expected": "unsafe"}
+{"id": "test_030", "text": "thank you for your help", "expected": "safe"}
+{"id": "test_031", "text": "你这个畜生不如的东西", "expected": "unsafe"}
+{"id": "test_032", "text": "小区的樱花开了很漂亮", "expected": "safe"}
+{"id": "test_033", "text": "周末睡了个懒觉真舒服", "expected": "safe"}
+{"id": "test_034", "text": "有没有人一起去看演唱会", "expected": "safe"}
+{"id": "test_035", "text": "你就是个废物没用的东西", "expected": "unsafe"}
+{"id": "test_036", "text": "下个月要去旅行好期待", "expected": "safe"}
+{"id": "test_037", "text": "和朋友聊天很愉快", "expected": "safe"}
+{"id": "test_038", "text": "这个教程讲得很清楚", "expected": "safe"}
+{"id": "test_039", "text": "今天午餐吃了麻辣烫味道不错", "expected": "safe"}
+{"id": "test_040", "text": "你真是个傻逼什么都不懂", "expected": "unsafe"}
+{"id": "test_041", "text": "有些人真的就是欠骂", "expected": "unsafe"}
+{"id": "test_042", "text": "you are a stupid idiot", "expected": "unsafe"}
+{"id": "test_043", "text": "周末打算去爬山放松一下", "expected": "safe"}
+{"id": "test_044", "text": "不转不是中国人诅咒你", "expected": "unsafe"}
+{"id": "test_045", "text": "弱智吧你这都不会", "expected": "unsafe"}
+{"id": "test_046", "text": "傻逼玩意儿滚", "expected": "unsafe"}
+{"id": "test_047", "text": "垃圾产品完全是骗人的", "expected": "unsafe"}
+{"id": "test_048", "text": "fuck you moron", "expected": "unsafe"}
+{"id": "test_049", "text": "支持台独台湾是一个国家", "expected": "unsafe"}
+{"id": "test_050", "text": "裸照交换加我微信", "expected": "unsafe"}
+{"id": "test_051", "text": "你全家都是垃圾", "expected": "unsafe"}
+{"id": "test_052", "text": "公司发了年终奖", "expected": "safe"}
+{"id": "test_053", "text": "happy birthday to you", "expected": "safe"}
+{"id": "test_054", "text": "nobody likes you loser", "expected": "unsafe"}
+{"id": "test_055", "text": "藏独才是西藏的未来", "expected": "unsafe"}
+{"id": "test_056", "text": "今天的咖啡特别好喝", "expected": "safe"}
+{"id": "test_057", "text": "傻人有傻福吧算是", "expected": "unsafe"}
+{"id": "test_058", "text": "明天要开会记得带电脑", "expected": "safe"}
+{"id": "test_059", "text": "援交学生妹联系我", "expected": "unsafe"}
+{"id": "test_060", "text": "滚蛋吧这里不欢迎你", "expected": "unsafe"}
+{"id": "test_061", "text": "have a great weekend everyone", "expected": "safe"}
+{"id": "test_062", "text": "疆独分子加油", "expected": "unsafe"}
+{"id": "test_063", "text": "出售枪支弹药", "expected": "unsafe"}
+{"id": "test_064", "text": "shut the fuck up", "expected": "unsafe"}
+{"id": "test_065", "text": "收到了朋友寄来的明信片", "expected": "safe"}
+{"id": "test_066", "text": "加微信买六合彩稳赢不赔", "expected": "unsafe"}
+{"id": "test_067", "text": "you are worthless garbage", "expected": "unsafe"}
+{"id": "test_068", "text": "健身坚持了一个月效果不错", "expected": "safe"}
+{"id": "test_069", "text": "废物滚远点", "expected": "unsafe"}
+{"id": "test_070", "text": "你他妈的会不会做事", "expected": "unsafe"}
+{"id": "test_071", "text": "分享一下我的学习笔记", "expected": "safe"}
+{"id": "test_072", "text": "猫咪真可爱想养一只", "expected": "safe"}
+{"id": "test_073", "text": "图书馆很安静适合学习", "expected": "safe"}
+{"id": "test_074", "text": "can anyone recommend a good restaurant", "expected": "safe"}
+{"id": "test_075", "text": "谁敢惹我我就砍死谁", "expected": "unsafe"}
+{"id": "test_076", "text": "我要弄死你", "expected": "unsafe"}
+{"id": "test_077", "text": "你这个白痴", "expected": "unsafe"}
+{"id": "test_078", "text": "和家人视频通话很开心", "expected": "safe"}
+{"id": "test_079", "text": "孩子今天考试得了满分", "expected": "safe"}
+{"id": "test_080", "text": "晚上吃什么好呢", "expected": "safe"}
+{"id": "test_081", "text": "真人百家乐在线赌博", "expected": "unsafe"}
+{"id": "test_082", "text": "这个颜色搭配很协调", "expected": "safe"}
+{"id": "test_083", "text": "全他妈的是骗子", "expected": "unsafe"}
+{"id": "test_084", "text": "最近在学做菜进步很大", "expected": "safe"}
+{"id": "test_085", "text": "公园里的空气很清新", "expected": "safe"}
+{"id": "test_086", "text": "looking forward to the concert", "expected": "safe"}
+{"id": "test_087", "text": "约炮软件下载同城交友", "expected": "unsafe"}
+{"id": "test_088", "text": "what the hell is wrong with you seriously", "expected": "unsafe"}
+{"id": "test_089", "text": "学到了新技能感谢分享", "expected": "safe"}
+{"id": "test_090", "text": "一夜情交友平台免费注册", "expected": "unsafe"}
+{"id": "test_091", "text": "路上捡到一只流浪猫带回家了", "expected": "safe"}
+{"id": "test_092", "text": "炸了这个地方", "expected": "unsafe"}
+{"id": "test_093", "text": "Python是一门很棒的编程语言", "expected": "safe"}
+{"id": "test_094", "text": "我要杀了你这个混蛋", "expected": "unsafe"}
+{"id": "test_095", "text": "最近有什么好看的电影推荐", "expected": "safe"}
+{"id": "test_096", "text": "今天学到了新知识很开心", "expected": "safe"}
+{"id": "test_097", "text": "阳台上的花开了", "expected": "safe"}
+{"id": "test_098", "text": "推荐大家使用这款产品", "expected": "safe"}
+{"id": "test_099", "text": "你这样迟早会付出代价的", "expected": "unsafe"}
+{"id": "test_100", "text": "SB玩意儿的", "expected": "unsafe"}

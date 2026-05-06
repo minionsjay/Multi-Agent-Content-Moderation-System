@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment (contains API keys)
+.env
+
+# Data files (runtime generated)
+data/chroma/
+data/events.jsonl
+data/review_queue.jsonl
+data/finetune_state.json
+data/assets/
+data/bench_100_results.json
+
+# Models (large binary files)
+models/
+onnx_models/
+*.gguf
+*.bin
+*.safetensors
+
+# Test images (generated)
+research/hot_path_bench/08_image_dhash/test_images/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/

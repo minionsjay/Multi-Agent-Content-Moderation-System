@@ -1,0 +1,33 @@
+# LangGraph + LangChain
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+
+# LLM (optional - for Claude Haiku)
+langchain-anthropic>=0.3.0
+
+# Vector cache
+chromadb>=0.5.0
+
+# Local embeddings (replaces OpenAI embeddings)
+sentence-transformers>=3.0.0
+
+# BERT inference
+transformers>=4.45.0
+torch>=2.4.0
+
+# Keyword matching
+pyahocorasick>=2.1.0
+
+# API server
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.0
+
+# File upload
+python-multipart>=0.0.9
+
+# Utilities
+python-dotenv>=1.0.0
+httpx>=0.27.0
