@@ -36,6 +36,7 @@ It defines:
 - `fraud` is the first Prototype example risk type; do not hard-code the whole system so only fraud can work.
 - Business keyword/rule assets already exist. Do not invent a rule optimization product unless a Spec explicitly asks for a debug or replay interface.
 - Model training is not implemented in this Prototype. Only reserve a manual or scheduled trigger interface.
+- Module B旁路优化应预留“可插拔 Agent backend”边界。当前默认使用本地确定性函数实现误判分析、规则调试、回放和训练触发占位；不要把OpenClaw、复杂multi-agent运行时或策略自动优化平台作为当前强依赖，除非具体Spec明确要求。
 
 ## 4. Task Granularity
 
@@ -60,3 +61,5 @@ Avoid broad tasks such as:
 Modules must collaborate through the shared JSON / JSONL contracts listed in `PROTOTYPE_SPEC_INDEX.md`.
 
 Do not introduce hidden coupling between Module A and Module B internals.
+
+Module B对外函数和JSON / JSONL契约必须保持稳定。后续接入OpenClaw、LangGraph或其他Agent框架时，只能替换旁路backend适配层，不能绕过Trace、ReviewResult、RuleConfig、EvaluationReport等共享契约。

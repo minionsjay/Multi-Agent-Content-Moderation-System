@@ -50,10 +50,11 @@ Sidecar Debug Agents
   ├── Error Analysis Agent
   ├── Rule Debug Agent
   ├── Replay Evaluation Agent
-  └── Training Trigger Agent
+  ├── Training Trigger Agent
+  └── Pluggable Sidecar Agent Backend
 ```
 
-Agent 在实现上可以是 LangGraph 节点、普通 Python 函数、API Handler 或页面动作；“Agent”表示职责边界，不要求每个角色都独立成服务。
+Agent 在实现上可以是 LangGraph 节点、普通 Python 函数、API Handler 或页面动作；“Agent”表示职责边界，不要求每个角色都独立成服务。旁路智能分析应通过可插拔 backend 适配层接入，当前默认本地函数实现，后续可替换为 OpenClaw、LangGraph 或其他 multi-agent backend。
 
 ## 3. Agent 职责
 
@@ -72,6 +73,7 @@ Agent 在实现上可以是 LangGraph 节点、普通 Python 函数、API Handle
 | Rule Debug Agent | B | content、language、rules | 调试结果、`candidate_rules.json` | 复用规则检测逻辑，支持候选规则调试；不代表自动上线 |
 | Replay Evaluation Agent | B | sample cases、old/candidate rules | `EvaluationReport` | 离线回放候选规则或配置，输出指标报告 |
 | Training Trigger Agent | B | manual / scheduled trigger | `TrainingTriggerResult` | 只记录训练触发请求；Prototype 不执行真实训练 |
+| Sidecar Agent Backend Adapter | B | Module B public API 请求 | `ErrorAnalysisResult` / `EvaluationReport` / 建议摘要 | 隔离具体Agent框架；默认本地实现，未来可接OpenClaw等 |
 
 ## 4. 在线审核链路
 
@@ -131,6 +133,8 @@ Error Analysis Agent
 ```text
 data/traces.jsonl + data/review_results.jsonl
   ↓
+Sidecar Agent Backend Adapter
+  ↓
 Error Analysis Agent
   ↓
 ErrorAnalysisResult
@@ -157,6 +161,7 @@ TrainingTriggerResult
 旁路链路约束：
 
 - Module B 只能依赖共享 JSON / JSONL 契约和可复用的公共规则检测函数。
+- Module B 对外函数不绑定具体 Agent 框架；OpenClaw 等框架只能作为 backend 实现接入。
 - 规则调试可以产出候选配置，但不自动上线。
 - 回放评测输出报告，不直接改变在线检测结果。
 - 训练触发只保留接口和记录，不执行真实训练流程。
@@ -182,6 +187,7 @@ Agent 间协作必须使用 `PROTOTYPE_SPEC_INDEX.md` 和 `SDD_PROTOTYPE_DEVELOP
 - 页面逻辑直接依赖未落盘的临时对象。
 - 用私有字段替代 `case_id` / `trace_id` 关联。
 - 新增与 `pass / block / review` 冲突的在线决策枚举。
+- 旁路 Agent backend 绕过 Module B public API 或共享文件契约。
 
 ## 8. 与 Spec 的映射
 
@@ -204,3 +210,4 @@ Agent 间协作必须使用 `PROTOTYPE_SPEC_INDEX.md` 和 `SDD_PROTOTYPE_DEVELOP
 - `fraud` 是当前示例风险类型，风险类型字段必须保留扩展空间。
 - 业务规则资产已经存在，当前只做加载、命中、Trace、调试和回放。
 - Agent 边界服务于解耦和调试，不要求为每个 Agent 创建独立进程或服务。
+- 旁路优化采用“默认本地backend + 未来可替换Agent backend”的渐进方式，不在Prototype阶段引入复杂multi-agent运行时强依赖。

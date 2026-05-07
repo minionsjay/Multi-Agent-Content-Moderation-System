@@ -14,20 +14,30 @@
 → Trace 记录
 → 人工审核回流
 → 旁路调试、误判分析、规则/模型接口预留
+→ 可插拔 Agent backend 预留
 ```
 
 原 POC 已跑通的 FastAPI、Gateway、LangGraph、图文审核、缓存、人审队列、离线反馈基础能力继续保留。新增 SDD / Spec 文档用于规范后续开发入口、数据契约和模块分工。
+
+当前MVP不把OpenClaw或复杂multi-agent框架作为旁路运行时强依赖。旁路优化先通过稳定函数和JSON / JSONL契约交付，内部预留可插拔Agent backend，后续可替换为OpenClaw、LangGraph或其他智能分析编排实现。
 
 ## 2. 启动方式
 
 技术入口保持不变：
 
 ```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
 cp .env.example .env
 pip install -r requirements.txt
 python check_env.py
 python -m src.api
 ```
+
+运行环境要求：
+
+- Python `3.10+`
+- 推荐使用 Python `3.11` 创建虚拟环境，避免系统自带 Python `3.9` 带来的类型语法兼容问题
 
 服务启动后访问：
 
@@ -71,7 +81,8 @@ LangGraph 在线检测
   ├── 人审回流
   ├── 误判分析接口
   ├── 规则调试 / 回放接口
-  └── 模型训练触发接口预留
+  ├── 模型训练触发接口预留
+  └── 可插拔 Agent backend：默认本地函数，后续可接 OpenClaw 等旁路智能分析框架
 ```
 
 图片审核按当前项目思路开发：图片先通过 OCR 等方式转为文本，再进入文本识别和内容风控链路；不引入多模态大模型作为本阶段核心依赖。
@@ -104,7 +115,7 @@ Prototype 的风险类型先以涉诈为例，但框架必须支持扩展：
 | 图片文本化 | dHash / URL 缓存、EasyOCR 等 OCR 信号 |
 | LLM | DeepSeek / OpenAI / Anthropic / 本地 llama.cpp 路径 |
 | 人审与 Trace | JSON / JSONL |
-| 旁路调试 | 误判分析、规则回放、训练触发接口预留 |
+| 旁路调试 | 误判分析、规则回放、训练触发接口预留、可插拔 Agent backend |
 
 ## 6. 项目结构
 
@@ -171,3 +182,4 @@ data/
 - 原 POC 功能已跑通的部分优先保留，不因 Prototype 文档重构而回退。
 - 训练、规则自动优化、线上灰度不是当前开发重点；只保留调试、触发和扩展接口。
 - 模块之间通过 JSON / JSONL 契约协作，不引入隐藏耦合。
+- 旁路优化的Agent框架接入采用backend适配层方式推进：当前默认本地实现，后续按单个Spec接入OpenClaw等框架，不改Module A内部状态和共享数据契约。

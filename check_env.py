@@ -5,8 +5,8 @@ import sys, os
 
 
 def check_python():
-    assert sys.version_info >= (3, 11), f"Need Python 3.11+, got {sys.version}"
-    print(f"[OK] Python {sys.version}")
+    assert sys.version_info >= (3, 10), f"Need Python 3.10+, got {sys.version}"
+    print(f"[OK] Python {sys.version} ({sys.executable})")
 
 
 def check_langgraph():

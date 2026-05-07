@@ -99,7 +99,7 @@ data/
 | 模块 | 目标 | 主要输出 |
 |---|---|---|
 | Module A：在线检测与人审回流 | 跑通输入、检测、Trace、人审 | `DetectionResult`、`TraceRecord`、`ReviewResult` |
-| Module B：旁路调试与回放接口 | 跑通误判读取、分析、回放、训练触发接口 | `ErrorAnalysisResult`、`EvaluationReport`、`TrainingTriggerResult` |
+| Module B：旁路调试与回放接口 | 跑通误判读取、分析、回放、训练触发接口，并预留可插拔 Agent backend | `ErrorAnalysisResult`、`EvaluationReport`、`TrainingTriggerResult` |
 
 模块间只通过 JSON / JSONL 契约协作。
 
@@ -365,12 +365,43 @@ data/
 - 给出基础归因和调试建议。
 - 支持规则文件或阈值配置回放。
 - 保留训练触发接口。
+- 保留可插拔 Agent backend 边界，当前默认本地函数实现，后续可接入 OpenClaw 等旁路智能分析框架。
 
 旁路当前不做：
 
 - 自动上线规则。
 - 真实模型训练。
 - 复杂策略优化平台。
+- 将 OpenClaw 或其他 multi-agent 运行时作为 Prototype 强依赖。
+
+### 8.1 旁路 Agent backend 预留原则
+
+Module B 的 public API 和 JSON / JSONL 契约先于 Agent 框架存在。实现时建议采用：
+
+```text
+Module B public function
+  ↓
+Sidecar Agent Backend interface
+  ↓
+Default local backend
+```
+
+后续如接入 OpenClaw、LangGraph 或其他 Agent 框架，只替换 backend 实现，不修改 Module A 内部状态，不改变 `TraceRecord`、`ReviewResult`、`RuleConfig`、`ErrorAnalysisResult`、`EvaluationReport` 和 `TrainingTriggerResult` 契约。
+
+backend 可以增强：
+
+- 漏检 / 误杀归因。
+- 候选调试项生成。
+- 规则回放总结。
+- 模型或训练触发建议。
+- 报告文本生成。
+
+backend 不可以：
+
+- 直接上线规则。
+- 直接修改生产策略。
+- 直接覆盖人工标签。
+- 绕过离线回放、人工审批和共享契约。
 
 ## 9. 最小交付链路
 
