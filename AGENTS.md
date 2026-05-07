@@ -38,6 +38,15 @@ It defines:
 - Model training is not implemented in this Prototype. Only reserve a manual or scheduled trigger interface.
 - Module B旁路优化应预留“可插拔 Agent backend”边界。当前默认使用本地确定性函数实现误判分析、规则调试、回放和训练触发占位；不要把OpenClaw、复杂multi-agent运行时或策略自动优化平台作为当前强依赖，除非具体Spec明确要求。
 
+## 3.1 Engineering Baseline
+
+- Python baseline is exactly `3.11.9` for local development, Docker, and CI.
+- Use `venv + pip + requirements.txt` as the dependency management baseline for this repository.
+- Install dependencies with `pip install -r requirements.txt`.
+- Do not introduce `uv`, `poetry`, `pyproject.toml`, `uv.lock`, or `poetry.lock` as the current project baseline unless the user explicitly asks for that migration.
+- Supported Docker base images are `python:3.11.9-slim` and `python:3.11.9-bookworm`.
+- Do not let version guidance drift across `README.md`, `.python-version`, `check_env.py`, `requirements.txt`, and CI configuration.
+
 ## 4. Task Granularity
 
 Implement one Spec ID or one integration checkpoint at a time.

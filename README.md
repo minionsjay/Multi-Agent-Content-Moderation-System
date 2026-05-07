@@ -21,7 +21,18 @@
 
 当前MVP不把OpenClaw或复杂multi-agent框架作为旁路运行时强依赖。旁路优化先通过稳定函数和JSON / JSONL契约交付，内部预留可插拔Agent backend，后续可替换为OpenClaw、LangGraph或其他智能分析编排实现。
 
-## 2. 启动方式
+## 2. 工程基线
+
+这组约束作为当前仓库的工程基线，目标是保持简单、稳定、低心智负担，优先服务当前 Prototype 的本地开发与同伴协作。
+
+- Python 基线固定为 `3.11.9`。
+- 本地开发统一使用 `venv + pip + requirements.txt`，不引入 `uv`、`poetry`、`pyproject.toml`、`uv.lock` 或 `poetry.lock` 作为当前工程基线。
+- 依赖安装以 `pip install -r requirements.txt` 为准；新增、删除或升级依赖时，同步维护 `requirements.txt`。
+- 本地开发环境与 CI 检查统一使用 `Python 3.11.9`，不再以 `3.10+` 作为兼容目标。
+- 如后续补充 Docker 运行环境，基础镜像应与本地保持一致，优先使用 `python:3.11.9-slim` 或 `python:3.11.9-bookworm`。
+- CI 如新增或调整 Python 相关 job，必须显式校验 `Python 3.11.9`，并按 `requirements.txt` 安装依赖。
+
+## 3. 启动方式
 
 技术入口保持不变：
 
@@ -36,8 +47,10 @@ python -m src.api
 
 运行环境要求：
 
-- Python `3.10+`
-- 推荐使用 Python `3.11` 创建虚拟环境，避免系统自带 Python `3.9` 带来的类型语法兼容问题
+- `python --version` 必须为 `Python 3.11.9`
+- `.python-version` 固定为 `3.11.9`，本地解释器需与之保持一致
+- 使用 `python3.11 -m venv .venv` 创建虚拟环境，并通过 `pip install -r requirements.txt` 安装依赖
+- 若使用 Docker，本地复现应优先选择 `python:3.11.9-slim` 或 `python:3.11.9-bookworm`
 
 服务启动后访问：
 
@@ -57,7 +70,7 @@ http://localhost:8000
 | `/review/resolve` | POST | 提交人审结果 |
 | `/health` | GET | 健康检查 |
 
-## 3. 统一架构口径
+## 4. 统一架构口径
 
 ```text
 请求
@@ -87,7 +100,7 @@ LangGraph 在线检测
 
 图片审核按当前项目思路开发：图片先通过 OCR 等方式转为文本，再进入文本识别和内容风控链路；不引入多模态大模型作为本阶段核心依赖。
 
-## 4. 决策与风险类型
+## 5. 决策与风险类型
 
 在线决策沿用原 POC：
 
@@ -104,7 +117,7 @@ Prototype 的风险类型先以涉诈为例，但框架必须支持扩展：
 
 关键词规则资产来自业务沉淀，不需要在 Prototype 中重新发明规则优化能力。当前目标是把规则加载、命中、Trace、调试和回放接口打通。
 
-## 5. 技术栈
+## 6. 技术栈
 
 | 层级 | 技术 |
 |---|---|
@@ -117,7 +130,7 @@ Prototype 的风险类型先以涉诈为例，但框架必须支持扩展：
 | 人审与 Trace | JSON / JSONL |
 | 旁路调试 | 误判分析、规则回放、训练触发接口预留、可插拔 Agent backend |
 
-## 6. 项目结构
+## 7. 项目结构
 
 ```text
 src/
@@ -161,7 +174,7 @@ prompts/
 data/
 ```
 
-## 7. 权威文档集
+## 8. 权威文档集
 
 根目录只保留这一套权威 Markdown 文档：
 
@@ -176,7 +189,7 @@ data/
 
 旧的 `ARCHITECTURE.md`、`OVERVIEW.md`、`ANALYSIS.md`、`OFFLINE_DEPLOY.md` 内容已整合到上述文档，不再作为执行或架构判断来源。
 
-## 8. 开发规则
+## 9. 开发规则
 
 - 以后派发 Coding Agent 任务时，只使用 [PROTOTYPE_SPEC_INDEX.md](PROTOTYPE_SPEC_INDEX.md) 中的单个 Spec ID 或单个连调点。
 - 原 POC 功能已跑通的部分优先保留，不因 Prototype 文档重构而回退。
@@ -184,7 +197,18 @@ data/
 - 模块之间通过 JSON / JSONL 契约协作，不引入隐藏耦合。
 - 旁路优化的Agent框架接入采用backend适配层方式推进：当前默认本地实现，后续按单个Spec接入OpenClaw等框架，不改Module A内部状态和共享数据契约。
 
-## 9. 开发 Roadmap（A / B 协作）
+## 10. 协作提示
+
+为方便同伴协作，建议在发起环境相关变更时同步检查以下四项是否一致：
+
+1. `README.md` 中的工程基线说明。
+2. `.python-version` 中固定的 Python 版本。
+3. `check_env.py` 中的版本检查逻辑。
+4. `requirements.txt` 中的依赖声明。
+
+如果某次任务只修改了其中一项，后续协作者很容易在本地、容器和 CI 之间遇到“文档说得对、环境却不是那样”的问题。
+
+## 11. 开发 Roadmap（A / B 协作）
 
 本 Roadmap 用于协作者在 GitHub 上快速理解开发顺序和联调闸门。具体派发任务时仍以 [PROTOTYPE_SPEC_INDEX.md](PROTOTYPE_SPEC_INDEX.md) 的单个 Spec ID 或单个连调点为准。
 
