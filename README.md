@@ -183,3 +183,164 @@ data/
 - 训练、规则自动优化、线上灰度不是当前开发重点；只保留调试、触发和扩展接口。
 - 模块之间通过 JSON / JSONL 契约协作，不引入隐藏耦合。
 - 旁路优化的Agent框架接入采用backend适配层方式推进：当前默认本地实现，后续按单个Spec接入OpenClaw等框架，不改Module A内部状态和共享数据契约。
+
+## 9. 开发 Roadmap（A / B 协作）
+
+本 Roadmap 用于协作者在 GitHub 上快速理解开发顺序和联调闸门。具体派发任务时仍以 [PROTOTYPE_SPEC_INDEX.md](PROTOTYPE_SPEC_INDEX.md) 的单个 Spec ID 或单个连调点为准。
+
+### 阶段 0：共享契约冻结，完成 G0
+
+目标：先让 A 生产的 JSON / JSONL 文件，B 可以不做字段转换直接读取。
+
+1. A 牵头完成 `S0.1-S0.6`：
+   - 创建 `rules/`、`prompts/`、可选 `prototype/`。
+   - 准备 `data/sample_cases.jsonl`。
+   - 准备 mock `data/traces.jsonl`。
+   - 准备 mock `data/review_results.jsonl`。
+   - 准备 `rules/rules_v0.json` 和 `rules/candidate_rules.json`。
+2. A+B 共同确认 `S0.7`：
+   - 固定 `TrainingTriggerResult` 字段。
+   - 确认 `manual/scheduled` 触发结构。
+3. B 并行实现 `B1` 读取 / join 骨架：
+   - 读取 Trace、ReviewResult、RuleConfig。
+   - 按 `case_id` / `trace_id` join。
+   - 不读取 Module A 内部运行状态。
+4. B 同步预留旁路 backend 适配层：
+   - Module B public function → Sidecar backend interface → 默认本地 backend。
+   - 当前不引入 OpenClaw 或复杂 multi-agent runtime 强依赖。
+5. A+B 执行 `G0`：
+   - B 能读取 mock Trace / Review / Rules。
+   - B 能 join。
+   - 字段无需二次转换。
+
+`G0` 不通过，不进入正式 `A2` / `B5`。
+
+### 阶段 1：规则检测与基础旁路，完成 G1
+
+目标：规则检测只实现一套，A 在线检测和 B 调试复用同一函数。
+
+1. A 实现 `A1` JSONL 存储工具。
+2. A 实现 `A2` 规则加载与检测：
+   - 读取 `rules/rules_v0.json`。
+   - 输出标准 `rule_node result`。
+   - 现有 `KeywordFilter` 可以复用，但必须适配 RuleConfig。
+3. B 在 `A2` 后实现 `B5` 第一版：
+   - `debug_rule_match(content, language, rules_path)`。
+   - 只读 `rules_v0.json`。
+   - 必须复用 A2 的规则检测函数。
+4. B 并行实现 `B2` 误判类型识别。
+5. A+B 执行 `G1`：
+   - 同一条内容在 A2 和 B5 的命中规则、排除词、证据必须一致。
+
+`G1` 通过后，规则函数才能被在线检测和回放评测稳定复用。
+
+### 阶段 2：在线检测真实链路，完成 G2
+
+目标：真实 DetectionResult + TraceRecord 能被 B 读取和分析。
+
+1. A 实现 `A3/A4/A5`：
+   - 语言识别或 fallback。
+   - 风险类型初判，`fraud` 是示例但不能写死为唯一类型。
+   - 算法分数节点。
+2. A 实现 `A6/A7/A12/A8`：
+   - LLM Judge 节点。
+   - 决策聚合节点。
+   - 图片 OCR 文本信号接入。
+   - 在线检测 Pipeline，写正式 TraceRecord。
+3. B 并行实现 `B3` mock 版：
+   - 基于 G0 mock joined records 输出 `ErrorAnalysisResult`。
+   - 内部走默认本地 backend。
+4. A+B 执行 `G2`：
+   - A 跑真实 `/moderate` 或 `run_online_detection`。
+   - 生成真实 DetectionResult + TraceRecord。
+   - B1 能读取真实 Trace。
+   - B3 能基于真实 Trace 和 mock Review 输出分析。
+
+`G2` 不通过，不进入真实人审回流分析。
+
+### 阶段 3：人审回流与误判分析，完成 G3
+
+目标：ReviewResult 能驱动真实误判分析。
+
+1. A 实现 `A10` 人审提交逻辑：
+   - 返回正式 ReviewResult。
+   - 自动计算 `error_type`。
+   - 写入 `data/review_results.jsonl`。
+2. A 实现 `A11` 人审页或最小人审操作界面。
+3. B 完成 `B3` 正式版：
+   - 输入真实 Trace + ReviewResult。
+   - 输出 `data/error_analysis_results.jsonl`。
+   - 给出 `root_cause`、`analysis`、`suggested_debug_action` 和 `candidate_terms`。
+4. B 实现 `B4` 数据层或简版页面。
+5. A+B 执行 `G3`：
+   - 至少覆盖 `false_negative`、`false_positive`、`category_error` 三类样例。
+
+### 阶段 4：候选规则与回放，完成 G4 / G5
+
+目标：candidate rules 可写入、可检测、可回放。
+
+1. B 实现 `B6`：
+   - 写入 `rules/candidate_rules.json`。
+   - 明确候选规则不自动上线。
+2. B 完善 `B5` 第二版：
+   - 支持 `rules_path=rules/candidate_rules.json`。
+3. A 配合确认 A2 规则加载函数同时支持 `rules_v0.json` 和 `candidate_rules.json`。
+4. A+B 执行 `G4`：
+   - B 写 candidate rule。
+   - B5 能调试 candidate rule。
+   - A2 能加载同一 candidate rule。
+5. B 实现 `B7` 回放评测器：
+   - 读取 `data/sample_cases.jsonl`。
+   - 对比 old rules 和 candidate rules。
+   - 生成 `data/evaluation_report.json`。
+6. B 实现 `B8` 回放报告页或最小报告 API。
+7. A+B 执行 `G5`：
+   - 共同确认 `evaluation_report.json` 指标和候选规则影响。
+
+### 阶段 5：训练触发与最终 Demo，完成 G6 / Demo
+
+目标：训练触发只是接口和记录，不执行真实训练。
+
+1. B 实现 `B9`：
+   - 支持 `manual/scheduled`。
+   - 返回 `TrainingTriggerResult`。
+   - 不执行真实训练。
+2. A 配合提供默认 dataset path，例如 `data/review_results.jsonl`。
+3. A+B 执行 `G6`：
+   - 触发一次 manual。
+   - 记录 `trigger_id`、`dataset_path`、`status` 和 `note`。
+4. A+B 做最终 Demo：
+   - 文本涉诈命中规则。
+   - 正常文本输出 `pass`。
+   - 图片 OCR 后进入文本检测。
+   - review 样本进入人审并落盘。
+   - B 输出误判分析。
+   - B 写 candidate rules。
+   - B 回放生成 evaluation report。
+   - B 训练触发接口返回 queued。
+
+### 关键依赖闸门
+
+```text
+S0.1-S0.7 + G0
+→ A1/B1
+
+A2
+→ B5 第一版
+→ G1
+
+A8 + A12
+→ B1/B3 接真实 Trace
+→ G2
+
+A10/A11
+→ B3 接真实 ReviewResult
+→ G3
+
+B6 + B5 第二版
+→ B7 真实 candidate 回放
+→ G4/G5
+
+B9
+→ G6
+```
