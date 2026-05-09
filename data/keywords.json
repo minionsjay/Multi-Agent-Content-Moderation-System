@@ -21,5 +21,23 @@
     "废物", "垃圾", "狗屁", "去死", "滚蛋",
     "fuck", "shit", "damn", "idiot", "stupid",
     "他妈的", "我操", "卧槽", "尼玛", "你妈"
+  ],
+  "combos": [
+    {"words": ["台湾", "独立"], "label": "politics", "note": "台独分裂言论"},
+    {"words": ["香港", "独立"], "label": "politics", "note": "港独分裂言论"},
+    {"words": ["新疆", "独立"], "label": "politics", "note": "疆独分裂言论"},
+    {"words": ["台独", "港独"], "label": "politics", "note": "多重分裂主张"},
+    {"words": ["藏独", "疆独"], "label": "politics", "note": "多重分裂主张"},
+    {"words": ["傻逼", "杀了你"], "label": "violence", "note": "辱骂升级为暴力威胁"},
+    {"words": ["垃圾", "去死"], "label": "violence", "note": "辱骂+死亡威胁"},
+    {"words": ["滚蛋", "杀了你"], "label": "violence", "note": "驱赶+死亡威胁"},
+    {"words": ["约炮", "裸照"], "label": "porn", "note": "色情邀约+裸照"},
+    {"words": ["一夜情", "裸照"], "label": "porn", "note": "一夜情+裸照"},
+    {"words": ["赌博", "下注"], "label": "gambling", "note": "赌博+下注引导"},
+    {"words": ["赌博", "盘口"], "label": "gambling", "note": "赌博+盘口引导"},
+    {"words": ["傻逼", "脑残"], "label": "toxic", "note": "多重人身攻击"},
+    {"words": ["弱智", "白痴"], "label": "toxic", "note": "多重人身攻击"},
+    {"words": ["他妈的", "傻逼"], "label": "toxic", "note": "多重辱骂"},
+    {"words": ["fuck", "shit"], "label": "toxic", "note": "英文多重辱骂"}
   ]
 }

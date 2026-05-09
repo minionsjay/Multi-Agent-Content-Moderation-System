@@ -40,6 +40,7 @@ WHITELIST_PHRASES = [
 class KeywordFilter:
     def __init__(self, dict_path: str | None = None):
         self.keywords: dict[str, list[str]] = {}
+        self.combos: list[dict] = []  # predefined dangerous word combinations
         self._automaton = None
         self._jieba_loaded = False
         self._jieba = None
@@ -51,10 +52,15 @@ class KeywordFilter:
     def _load(self, dict_path: str | None):
         if dict_path and os.path.exists(dict_path):
             with open(dict_path) as f:
-                self.keywords = json.load(f)
+                data = json.load(f)
+                self.combos = data.pop("combos", [])
+                self.keywords = data
         else:
             self.keywords = DEFAULT_KEYWORDS
+            self.combos = []
             logger.info("Using default keyword dictionary (%d categories)", len(self.keywords))
+        if self.combos:
+            logger.info("Loaded %d combo phrases", len(self.combos))
 
     def _build_automaton(self):
         try:
@@ -168,19 +174,81 @@ class KeywordFilter:
         if label is None and matched_categories:
             label = "toxic"
 
-        # Confidence: 1.0 if ANY match is standalone, 0.6 if ALL are embedded
-        if has_standalone:
-            confidence = 1.0
-        elif has_embedded:
-            confidence = 0.6
+        # Check predefined combo phrases (dangerous keyword combinations)
+        combo_result = self._check_combos(validated_matches)
+        if combo_result:
+            # Known dangerous combo → override label, max confidence
+            return {
+                "label": combo_result["label"],
+                "confidence": 1.0,
+                "matches": validated_matches,
+                "combo_hit": combo_result,
+                "multi_hit": True,
+                "category_count": len(matched_categories),
+            }
+
+        # Multi-keyword confidence boosting
+        num_matches = len(validated_matches)
+        num_categories = len(matched_categories)
+
+        if num_matches >= 2:
+            if num_categories >= 3:
+                # Keywords from 3+ different categories → very suspicious
+                confidence = 1.0
+            elif num_categories >= 2:
+                # Keywords from 2 different categories → strong signal
+                # e.g. "toxic" + "violence" words together
+                if has_standalone:
+                    confidence = 1.0
+                else:
+                    confidence = 0.9
+            elif num_matches >= 3:
+                # 3+ keywords in same category → boosted
+                confidence = 1.0 if has_standalone else 0.85
+            elif num_matches >= 2:
+                # 2 keywords in same category → slight boost
+                confidence = 1.0 if has_standalone else 0.75
+            else:
+                confidence = 1.0 if has_standalone else 0.6
         else:
-            confidence = 0.0
+            # Original logic: single keyword
+            if has_standalone:
+                confidence = 1.0
+            elif has_embedded:
+                confidence = 0.6
+            else:
+                confidence = 0.0
 
         return {
             "label": label,
             "confidence": confidence,
             "matches": validated_matches,
+            "multi_hit": num_matches >= 2,
+            "category_count": num_categories,
         }
+
+    def _check_combos(self, validated_matches: list[dict]) -> dict | None:
+        """Check if matched keywords form a known dangerous combination.
+
+        A combo is triggered when ALL words in a combo definition appear
+        in the text (order-independent, adjacency not required).
+
+        Returns combo dict with label + note if hit, None otherwise.
+        """
+        if not self.combos or len(validated_matches) < 2:
+            return None
+
+        matched_words_lower = {m["word"].lower() for m in validated_matches}
+
+        for combo in self.combos:
+            combo_words = {w.lower() for w in combo["words"]}
+            if combo_words.issubset(matched_words_lower):
+                return {
+                    "label": combo["label"],
+                    "note": combo.get("note", ""),
+                    "matched_words": list(combo_words),
+                }
+        return None
 
     @staticmethod
     def _find_all_positions(text: str, word: str) -> list[int]:
