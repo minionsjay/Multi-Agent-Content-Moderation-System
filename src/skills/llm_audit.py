@@ -1,10 +1,10 @@
 import json
 import logging
 from src.config import (
-    LLM_PROVIDER,
+    LLM_PROVIDER, LLM_NO_PROXY,
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
-    OPENAI_API_KEY, OPENAI_BASE_URL,
-    ANTHROPIC_API_KEY,
+    OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL,
+    ANTHROPIC_API_KEY, ANTHROPIC_MODEL,
 )
 
 logger = logging.getLogger(__name__)
@@ -117,14 +117,17 @@ class LLMAuditor:
         if self.provider == "deepseek":
             return DEEPSEEK_MODEL
         elif self.provider == "openai":
-            from src.config import OPENAI_MODEL
-            return os.getenv("OPENAI_MODEL", "gpt-4o-mini") if "OPENAI_MODEL" not in dir() else "gpt-4o-mini"
-        else:
-            return "claude-3-5-haiku-latest"
+            return OPENAI_MODEL
+        else:  # anthropic
+            return ANTHROPIC_MODEL
 
     def _get_openai_client(self, api_key: str, base_url: str):
+        import httpx
         from openai import AsyncOpenAI
-        return AsyncOpenAI(api_key=api_key, base_url=base_url)
+        kwargs = {"api_key": api_key, "base_url": base_url}
+        if LLM_NO_PROXY:
+            kwargs["http_client"] = httpx.AsyncClient(proxy=None)
+        return AsyncOpenAI(**kwargs)
 
     def _get_client(self):
         if self._client is not None:
