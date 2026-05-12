@@ -503,14 +503,16 @@ select { background:var(--bg); border:1px solid var(--border); color:var(--text)
       <div class="card-head" style="cursor:pointer" onclick="toggleModelCfg()"><span>模型配置</span><span id="cfgCaret">▾</span></div>
       <div class="card-body" id="cfgBody">
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px;font-weight:600">BERT 模型 (L2)</div>
-        <select id="bertModel" onchange="updateCfgLabel()">
+        <select id="bertModel" onchange="onBertModelChange()">
           <option value="">KoalaAI/Text-Moderation (默认)</option>
           <option value="KoalaAI/Text-Moderation">KoalaAI (9标签安全分类)</option>
           <option value="unitary/toxic-bert">toxic-bert (英文毒性)</option>
           <option value="unitary/multilingual-toxic-xlm-roberta">XLM-RoBERTa (多语言)</option>
           <option value="Qwen/Qwen3Guard-Gen-0.6B">Qwen3Guard (0.6B, 中文)</option>
+          <option value="__custom__">自定义模型 (输入路径/HF ID)...</option>
           <option value="skip">跳过 BERT → 直接 LLM</option>
         </select>
+        <input type="text" id="bertModelCustom" placeholder="输入 HuggingFace 模型 ID 或本地路径，如 /home/me/models/my-bert" style="display:none;margin-top:4px" oninput="updateCfgLabel()" />
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px;font-weight:600">LLM 提供商</div>
         <select id="llmProvider" onchange="updateCfgLabel()">
           <option value="">DeepSeek (默认)</option>
@@ -557,15 +559,29 @@ function toggleModelCfg() {
   b.classList.toggle('hidden');
   c.textContent = b.classList.contains('hidden') ? '▸' : '▾';
 }
+function onBertModelChange() {
+  const sel = document.getElementById('bertModel').value;
+  const custom = document.getElementById('bertModelCustom');
+  custom.style.display = sel === '__custom__' ? 'block' : 'none';
+  updateCfgLabel();
+}
 function updateCfgLabel() {
-  const b = document.getElementById('bertModel').value || 'KoalaAI/Text-Moderation';
+  let b = document.getElementById('bertModel').value;
+  if (b === '__custom__') {
+    b = document.getElementById('bertModelCustom').value.trim() || '(等待输入)';
+  } else if (!b) {
+    b = 'KoalaAI/Text-Moderation';
+  }
   const p = document.getElementById('llmProvider').value || 'deepseek';
   const m = document.getElementById('llmModel').value || 'deepseek-chat';
   document.getElementById('cfgLabel').textContent = `BERT: ${b.split('/').pop()} · LLM: ${m}`;
 }
 updateCfgLabel();
 function getOverrides() {
-  const b = document.getElementById('bertModel').value;
+  let b = document.getElementById('bertModel').value;
+  if (b === '__custom__') {
+    b = document.getElementById('bertModelCustom').value.trim() || '';
+  }
   const p = document.getElementById('llmProvider').value;
   const m = document.getElementById('llmModel').value;
   return { bert_model: b, llm_provider: p, llm_model: m };
