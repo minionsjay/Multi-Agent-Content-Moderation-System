@@ -154,21 +154,21 @@ def bench_throughput():
 
 
 def bench_chinese_skip():
-    """Verify Chinese text correctly bypasses English BERT."""
+    """Verify Chinese text is no longer force-skipped — BERT handles all languages."""
     print("\n" + "=" * 60)
-    print("Test 6: Chinese Text Bypass Verification")
+    print("Test 6: Chinese Text — No Longer Skipped")
     print("=" * 60)
 
-    from src.agents.text_agent import _is_primarily_chinese
-
     for text in TEST_TEXTS:
-        is_cn = _is_primarily_chinese(text)
-        would_bypass = is_cn and "toxic-bert" in str(bert_classifier.model_name).lower()
-        print(f"  [{'跳过' if would_bypass else '正常'}] CJK={is_cn} | {text[:50]}")
+        result = bert_classifier.classify(text)
+        skip_llm = bert_classifier.should_skip_llm(result)
+        print(f"  [{result['label']:>6s} conf={result['confidence']:.3f}] "
+              f"{'→ skip LLM' if skip_llm else '→ escalate LLM'} | {text[:50]}")
 
-    cn_count = sum(1 for t in TEST_TEXTS if _is_primarily_chinese(t))
-    print(f"\n  Chinese texts: {cn_count}/{len(TEST_TEXTS)} → {cn_count} will skip BERT L2 → go straight to LLM L3")
-    print(f"  This is a known POC limitation — need multilingual BERT for production.")
+    print(f"\n  Chinese text is no longer force-skipped.")
+    print(f"  Models that support Chinese (KoalaAI, XLM-RoBERTa, Qwen3Guard)")
+    print(f"  will classify it normally; English-only models will return")
+    print(f"  low confidence and naturally escalate to LLM.")
 
 
 if __name__ == "__main__":

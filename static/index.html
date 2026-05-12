@@ -568,8 +568,7 @@ function getOverrides() {
   const b = document.getElementById('bertModel').value;
   const p = document.getElementById('llmProvider').value;
   const m = document.getElementById('llmModel').value;
-  return b === 'skip' ? { bert_enabled: false, llm_provider: p, llm_model: m }
-    : { bert_model: b, llm_provider: p, llm_model: m };
+  return { bert_model: b, llm_provider: p, llm_model: m };
 }
 
 // ===== IMAGE =====

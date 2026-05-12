@@ -10,13 +10,6 @@ from src.config import BERT_ENABLED, BERT_MODEL, LLM_PROVIDER
 logger = logging.getLogger(__name__)
 
 
-def _is_primarily_chinese(text: str) -> bool:
-    """Check if text is primarily Chinese (CJK characters > 30%)."""
-    if not text:
-        return False
-    cjk = sum(1 for c in text if '一' <= c <= '鿿' or '㐀' <= c <= '䶿')
-    return cjk / len(text) > 0.3 if len(text) > 0 else False
-
 
 async def text_specialist(state: ModerationState) -> dict:
     t0 = time.perf_counter()
@@ -74,50 +67,35 @@ async def text_specialist(state: ModerationState) -> dict:
     if bert_enabled:
         t2 = time.perf_counter()
         bert_model_name = state.get("bert_model") or BERT_MODEL
-        is_chinese = _is_primarily_chinese(text)
-        bert_skipped = False
 
-        # All currently available BERT models are English-primary.
-        # Chinese content always skips BERT L2 → goes to LLM L3.
-        # This is the correct behavior until a verified Chinese-capable
-        # safety model is integrated (e.g., fine-tuned Qwen3Guard).
-        if is_chinese:
-            # English-only BERT can't handle Chinese — skip to L3
-            traces.append(_trace("text_agent", "L2_bert", "BERT · skipped (CN text)", text,
-                                {"reason": "English-only BERT cannot evaluate Chinese → escalating to LLM",
-                                 "lang": "zh", "model": bert_model_name},
-                                0, "zero"))
-            bert_result = {"label": "unsafe", "confidence": 0.5}
-            bert_skipped = True
-        else:
-            # Try ONNX first for speed, fallback to HF if confidence too low
-            bert_backend = "unknown"
-            try:
-                from src.skills.bert_onnx import bert_onnx
-                bert_result = bert_onnx.classify(text)
-                bert_backend = bert_result.get("backend", "onnx")
+        # Try ONNX first for speed, fallback to HF if confidence too low
+        bert_backend = "unknown"
+        try:
+            from src.skills.bert_onnx import bert_onnx
+            bert_result = bert_onnx.classify(text)
+            bert_backend = bert_result.get("backend", "onnx")
 
-                # ONNX confidence too low to skip LLM → try HF as second opinion
-                if not bert_classifier.should_skip_llm(bert_result):
-                    hf_check = bert_classifier.classify(text, model_override=bert_model_name)
-                    if bert_classifier.should_skip_llm(hf_check):
-                        bert_result = hf_check
-                        bert_backend = "onnx→HF(high conf)"
-                    # else: keep ONNX result, go to L3
-            except Exception:
-                bert_result = bert_classifier.classify(text, model_override=bert_model_name)
-                bert_backend = "transformers"
+            # ONNX confidence too low to skip LLM → try HF as second opinion
+            if not bert_classifier.should_skip_llm(bert_result):
+                hf_check = bert_classifier.classify(text, model_override=bert_model_name)
+                if bert_classifier.should_skip_llm(hf_check):
+                    bert_result = hf_check
+                    bert_backend = "onnx→HF(high conf)"
+                # else: keep ONNX result, go to L3
+        except Exception:
+            bert_result = bert_classifier.classify(text, model_override=bert_model_name)
+            bert_backend = "transformers"
 
-            bert_ms = (time.perf_counter() - t2) * 1000
-            traces.append(_trace("text_agent", "L2_bert",
-                f"BERT · {bert_model_name.rsplit('/', 1)[-1]} ({bert_backend})", text,
-                {"label": bert_result["label"], "confidence": bert_result["confidence"],
-                 "all_scores": bert_result.get("raw", []),
-                 "threshold_high": 0.95, "threshold_low": 0.4,
-                 "error": bert_result.get("error")},
-                bert_ms, "low"))
+        bert_ms = (time.perf_counter() - t2) * 1000
+        traces.append(_trace("text_agent", "L2_bert",
+            f"BERT · {bert_model_name.rsplit('/', 1)[-1]} ({bert_backend})", text,
+            {"label": bert_result["label"], "confidence": bert_result["confidence"],
+             "all_scores": bert_result.get("raw", []),
+             "threshold_high": 0.95, "threshold_low": 0.4,
+             "error": bert_result.get("error")},
+            bert_ms, "low"))
 
-        if not bert_skipped and bert_classifier.should_skip_llm(bert_result):
+        if bert_classifier.should_skip_llm(bert_result):
             traces.append(_trace("text_agent", "L2_decision", "决策规则 · 置信度阈值", "",
                                 {"decision": bert_result["label"], "tier": "L2_bert",
                                  "reason": f"BERT conf={bert_result['confidence']:.4f} >= threshold(0.95) → 跳过LLM"},
@@ -168,6 +146,19 @@ async def text_specialist(state: ModerationState) -> dict:
                           "cost": "low"}
         llm_cost = "low"
         model_label = f"Local · {llm_result.get('model', 'transformers')}"
+    elif llm_provider == "sglang":
+        from src.skills.llm_sglang import llm_sglang
+        try:
+            llm_result = await asyncio.wait_for(
+                llm_sglang.audit(text, context),
+                timeout=120.0)  # first call loads engine, subsequent calls <1s
+        except asyncio.TimeoutError:
+            logger.warning("SGLang timed out — falling back to BERT result")
+            llm_result = {"label": bert_result["label"], "confidence": bert_result["confidence"],
+                          "reason": "SGLang timeout, using BERT result", "model": "fallback_bert",
+                          "cost": "low"}
+        llm_cost = "low"
+        model_label = f"Local · {llm_result.get('model', 'sglang')}"
     else:
         try:
             llm_result = await asyncio.wait_for(
