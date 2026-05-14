@@ -159,6 +159,19 @@ async def text_specialist(state: ModerationState) -> dict:
                           "cost": "low"}
         llm_cost = "low"
         model_label = f"Local · {llm_result.get('model', 'sglang')}"
+    elif llm_provider == "qwen_guard":
+        from src.skills.llm_qwen_guard import llm_qwen_guard
+        try:
+            llm_result = await asyncio.wait_for(
+                llm_qwen_guard.audit(text, context, model=llm_model),
+                timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.warning("Qwen3Guard timed out — falling back to BERT result")
+            llm_result = {"label": bert_result["label"], "confidence": bert_result["confidence"],
+                          "reason": "Qwen3Guard timeout, using BERT result", "model": "fallback_bert",
+                          "cost": "low"}
+        llm_cost = "low"
+        model_label = f"Qwen3Guard · {llm_result.get('model', 'qwen_guard')}"
     else:
         try:
             llm_result = await asyncio.wait_for(

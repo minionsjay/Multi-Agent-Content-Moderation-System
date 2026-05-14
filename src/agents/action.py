@@ -17,16 +17,23 @@ async def action_executor(state: ModerationState) -> dict:
     decision = state.get("decision", "pass")
     text = state.get("text", "")
 
+    # Determine tier for cache storage
+    text_result = state.get("text_result") or {}
+    image_result = state.get("image_result") or {}
+    tier = text_result.get("tier", "") if text_result else ""
+
     # Write result to caches
     if not state.get("cache_hit") and text.strip():
         # L0a: Local memory cache (instant exact-match lookup)
-        memory_cache.set(text, decision, state.get("confidence", 0.0), state.get("reason", ""))
+        memory_cache.set(text, decision, state.get("confidence", 0.0),
+                        state.get("reason", ""), tier)
         traces.append(_trace("action", "cache_L0a_store", "Python dict · SHA256",
                             f"Storing exact match: {decision}", {"cached": True},
                             0.0, "zero"))
 
         # L0b: Redis shared cache (persistent, cross-worker)
-        redis_cache.set(text, decision, state.get("confidence", 0.0), state.get("reason", ""))
+        redis_cache.set(text, decision, state.get("confidence", 0.0),
+                       state.get("reason", ""), tier)
         traces.append(_trace("action", "cache_L0b_store", "Redis · shared",
                             f"Storing in Redis: {decision}", {"cached": True},
                             0.0, "zero"))
@@ -39,6 +46,7 @@ async def action_executor(state: ModerationState) -> dict:
                 embedding=embedding, text=text, decision=decision,
                 confidence=state.get("confidence", 0.0),
                 reason=state.get("reason", ""),
+                tier=tier,
             )
             traces.append(_trace("action", "cache_L1_store", "TF-IDF · ChromaDB",
                                 f"Storing semantic: {decision}", {"cached": True},

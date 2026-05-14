@@ -16,6 +16,7 @@ env/
 
 # Data files (runtime generated)
 data/chroma/
+data/memory_cache.json
 data/events.jsonl
 data/review_queue.jsonl
 data/finetune_state.json

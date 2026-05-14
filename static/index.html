@@ -296,6 +296,143 @@ select { background:var(--bg); border:1px solid var(--border); color:var(--text)
 .batch-table tr:hover td { background:rgba(0,232,90,0.02); }
 
 .ocr-alert { border:1px solid var(--cyan); background:rgba(0,216,208,0.05); border-radius:2px; padding:12px 18px; }
+
+/* ---- BATCH EXPANDABLE ROWS ---- */
+.batch-table tr.expandable { cursor:pointer; }
+.batch-table tr.expandable:hover td { background:rgba(0,232,90,0.04); }
+.batch-table tr.expandable .expand-caret {
+  display:inline-block; width:16px; font-family:var(--font-mono); font-size:10px;
+  color:var(--text-dim); transition:transform 0.2s; margin-right:2px;
+}
+.batch-table td.expand-td { max-width:none; }
+.batch-table tr.expandable.expanded .expand-caret { transform:rotate(90deg); color:var(--green); }
+.batch-table tr.expandable.expanded td { border-bottom-color:transparent; background:rgba(0,232,90,0.04); }
+
+.batch-detail-row { display:none; }
+.batch-detail-row.open { display:table-row; animation:detailSlideIn 0.25s ease-out; }
+@keyframes detailSlideIn { from { opacity:0; transform:translateY(-8px); } }
+.batch-detail-row td {
+  padding:0 !important; max-width:none !important; overflow:visible !important;
+  white-space:normal !important; border-bottom:2px solid var(--border-active) !important;
+}
+
+.detail-panel {
+  background:var(--bg); margin:0; padding:20px 24px;
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:16px 24px; font-size:14px;
+}
+@media (max-width:1000px) { .detail-panel { grid-template-columns:1fr; } }
+
+/* detail: content + metadata block */
+.detail-content {
+  grid-column:1/-1;
+  background:var(--panel2); border:1px solid var(--border);
+  border-radius:3px; padding:14px 18px;
+}
+.detail-content .dc-label {
+  font-size:11px; color:var(--text-dim); letter-spacing:2px; margin-bottom:8px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.detail-content .dc-text {
+  font-size:16px; color:var(--text-bright); line-height:1.9;
+  font-family:var(--font-sans); word-break:break-all;
+}
+
+/* detail: path badges */
+.path-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 14px; border-radius:2px; font-family:var(--font-mono);
+  font-size:12px; letter-spacing:1px; font-weight:700;
+}
+.path-hot { border:1px solid var(--amber); color:var(--amber); background:var(--amber-bg); }
+.path-cold { border:1px solid var(--blue); color:var(--blue); background:var(--blue-bg); }
+.path-error { border:1px solid var(--red); color:var(--red); background:var(--red-bg); }
+.tier-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:4px 12px; border-radius:2px; font-family:var(--font-mono);
+  font-size:12px; letter-spacing:1px; font-weight:700;
+  border:1px solid var(--purple); color:var(--purple); background:var(--purple-bg);
+}
+
+/* detail: stats mini-grid */
+.detail-stats {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+}
+.detail-stat {
+  background:var(--panel2); border:1px solid var(--border); border-radius:2px;
+  padding:12px; text-align:center;
+}
+.detail-stat .ds-val {
+  font-family:var(--font-mono); font-size:20px; font-weight:700; color:var(--green);
+}
+.detail-stat .ds-lbl {
+  font-size:10px; color:var(--text-dim); letter-spacing:1px; margin-top:4px;
+}
+
+/* detail: trace timeline */
+.detail-traces {
+  grid-column:1/-1;
+  border-top:1px solid var(--border); padding-top:14px;
+}
+.detail-traces .dt-title {
+  font-size:11px; color:var(--text-dim); letter-spacing:2px; margin-bottom:12px;
+  font-weight:700;
+}
+.trace-timeline { position:relative; padding-left:20px; }
+.trace-timeline::before {
+  content:''; position:absolute; left:6px; top:4px; bottom:4px;
+  width:1px; background:var(--border);
+}
+.trace-step-card {
+  position:relative; margin-bottom:8px;
+  background:var(--panel2); border:1px solid var(--border);
+  border-radius:3px; padding:10px 16px;
+  cursor:pointer; transition:all 0.15s;
+}
+.trace-step-card:hover { border-color:var(--border-active); background:var(--panel); }
+.trace-step-card::before {
+  content:''; position:absolute; left:-18px; top:14px;
+  width:8px; height:8px; border-radius:50%;
+  background:var(--border); border:2px solid var(--bg);
+}
+.trace-step-card.hit::before { background:var(--green); box-shadow:0 0 6px var(--green-dim); }
+.trace-step-card.miss::before { background:var(--text-dim); }
+.trace-step-card.block::before { background:var(--red); box-shadow:0 0 6px var(--red); }
+.trace-step-card.llm::before { background:var(--purple); box-shadow:0 0 6px var(--purple); }
+
+.trace-step-card .tsc-header {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.trace-step-card .tsc-node {
+  font-family:var(--font-mono); font-size:12px; color:var(--cyan); font-weight:700;
+}
+.trace-step-card .tsc-step {
+  font-family:var(--font-mono); font-size:12px; color:var(--amber);
+}
+.trace-step-card .tsc-model {
+  font-size:11px; color:var(--text-dim);
+  max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.trace-step-card .tsc-meta {
+  margin-left:auto; display:flex; align-items:center; gap:8px;
+}
+.trace-step-card .tsc-latency {
+  font-family:var(--font-mono); font-size:13px; color:var(--text-bright); font-weight:700;
+}
+.trace-step-card .tsc-cost {
+  font-size:10px; padding:2px 8px; border-radius:2px; font-weight:600;
+}
+.trace-step-card .tsc-detail {
+  display:none; margin-top:10px; padding-top:10px;
+  border-top:1px solid var(--border);
+  font-size:13px; color:var(--text-dim); line-height:1.7;
+}
+.trace-step-card .tsc-detail.open { display:block; }
+.trace-step-card .tsc-detail .tscd-row { margin:3px 0; display:flex; gap:8px; }
+.trace-step-card .tsc-detail .tscd-key { color:var(--text-dim); min-width:60px; flex-shrink:0; }
+.trace-step-card .tsc-detail .tscd-val { color:var(--text-bright); word-break:break-all; }
+.trace-step-card .tsc-detail .tscd-val.danger { color:var(--red); }
+.trace-step-card .tsc-detail .tscd-val.safe { color:var(--green); }
 </style>
 </head>
 <body>
@@ -441,7 +578,7 @@ select { background:var(--bg); border:1px solid var(--border); color:var(--text)
       <div class="card">
         <div class="card-head">详细结果</div>
         <div class="card-body" style="overflow-x:auto">
-          <table class="batch-table" id="batchTable"><thead><tr><th>ID</th><th>内容</th><th>判定</th><th>置信度</th><th>层级</th><th>延迟</th></tr></thead><tbody></tbody></table>
+          <table class="batch-table" id="batchTable"><thead><tr><th style="width:24px"></th><th>ID</th><th>内容</th><th>判定</th><th>置信度</th><th>层级</th><th>路径</th><th>延迟</th></tr></thead><tbody></tbody></table>
         </div>
       </div>
     </div>
@@ -485,6 +622,10 @@ select { background:var(--bg); border:1px solid var(--border); color:var(--text)
           <div class="stat-item"><div class="stat-value cold" id="sEscalate">-%</div><div class="stat-label">升级冷路径</div></div>
         </div>
       </div>
+	        <div style="margin-top:10px;display:flex;gap:8px">
+	          <button class="btn btn-sm" onclick="clearAllCaches()" style="color:var(--red);border-color:var(--red)">清除全部缓存</button>
+	          <span style="font-size:12px;color:var(--text-dim);align-self:center" id="cacheMsg"></span>
+	        </div>
     </div>
 
     <!-- Review Stats -->
@@ -508,27 +649,32 @@ select { background:var(--bg); border:1px solid var(--border); color:var(--text)
           <option value="KoalaAI/Text-Moderation">KoalaAI (9标签安全分类)</option>
           <option value="unitary/toxic-bert">toxic-bert (英文毒性)</option>
           <option value="unitary/multilingual-toxic-xlm-roberta">XLM-RoBERTa (多语言)</option>
-          <option value="Qwen/Qwen3Guard-Gen-0.6B">Qwen3Guard (0.6B, 中文)</option>
           <option value="__custom__">自定义模型 (输入路径/HF ID)...</option>
           <option value="skip">跳过 BERT → 直接 LLM</option>
         </select>
         <input type="text" id="bertModelCustom" placeholder="输入 HuggingFace 模型 ID 或本地路径，如 /home/me/models/my-bert" style="display:none;margin-top:4px" oninput="updateCfgLabel()" />
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px;font-weight:600">LLM 提供商</div>
-        <select id="llmProvider" onchange="updateCfgLabel()">
+        <select id="llmProvider" onchange="onLlmProviderChange()">
           <option value="">DeepSeek (默认)</option>
           <option value="deepseek">DeepSeek</option>
           <option value="openai">OpenAI</option>
           <option value="anthropic">Anthropic</option>
+          <option value="qwen_guard">Qwen3Guard (本地 0.6B)</option>
+          <option value="transformers">Transformers (本地 LLM)</option>
         </select>
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px;font-weight:600">LLM 模型</div>
         <select id="llmModel" onchange="updateCfgLabel()">
-          <option value="">deepseek-chat (默认)</option>
+          <option value="">自动选择</option>
           <option value="deepseek-chat">deepseek-chat (V3)</option>
           <option value="deepseek-reasoner">deepseek-reasoner (R1)</option>
           <option value="gpt-4o-mini">gpt-4o-mini (OpenAI)</option>
           <option value="claude-3-5-haiku-latest">Claude Haiku 3.5</option>
           <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+          <option value="Qwen/Qwen3Guard-Gen-0.6B">Qwen3Guard (0.6B)</option>
+          <option value="Qwen/Qwen2.5-1.5B-Instruct">Qwen2.5 (1.5B)</option>
+          <option value="Qwen/Qwen2.5-7B-Instruct">Qwen2.5 (7B)</option>
         </select>
+        <input type="text" id="llmModelCustom" placeholder="输入模型路径或 HF ID，如 /path/to/model" style="display:none;margin-top:4px" oninput="updateCfgLabel()" />
         <div id="cfgLabel" style="font-size:11px;color:var(--green);margin-top:6px"></div>
       </div>
     </div>
@@ -577,13 +723,26 @@ function updateCfgLabel() {
   document.getElementById('cfgLabel').textContent = `BERT: ${b.split('/').pop()} · LLM: ${m}`;
 }
 updateCfgLabel();
+function onLlmProviderChange() {
+  const p = document.getElementById('llmProvider').value;
+  const mSel = document.getElementById('llmModel');
+  const mCust = document.getElementById('llmModelCustom');
+  if (p === 'qwen_guard') {
+    mSel.value = 'Qwen/Qwen3Guard-Gen-0.6B';
+  } else if (p === 'transformers') {
+    mSel.value = 'Qwen/Qwen2.5-1.5B-Instruct';
+  }
+  updateCfgLabel();
+}
 function getOverrides() {
   let b = document.getElementById('bertModel').value;
   if (b === '__custom__') {
     b = document.getElementById('bertModelCustom').value.trim() || '';
   }
-  const p = document.getElementById('llmProvider').value;
-  const m = document.getElementById('llmModel').value;
+  let p = document.getElementById('llmProvider').value;
+  let m = document.getElementById('llmModel').value;
+  const mCust = document.getElementById('llmModelCustom').value.trim();
+  if (mCust) m = mCust;
   return { bert_model: b, llm_provider: p, llm_model: m };
 }
 
@@ -735,6 +894,16 @@ function buildDetail(t) {
   if(t.step==='L1_keyword'||t.step.includes('keyword')) {
     h+=`<div class="td-row"><span class="td-key">标签:</span> <span class="td-val danger">${esc(o.label||'无')}</span></div>`;
     h+=`<div class="td-row"><span class="td-key">置信度:</span> <span class="td-val">${((o.confidence||0)*100).toFixed(0)}%</span></div>`;
+    // Show matched keywords
+    if (o.matched_keywords && o.matched_keywords.length > 0) {
+      h+=`<div class="td-row"><span class="td-key">命中词:</span><span class="td-val">`;
+      for (const kw of o.matched_keywords) {
+        if (kw.category === 'combo_rule') continue;
+        const ctxLabel = kw.context === 'standalone' ? '独立词' : kw.context === 'combo' ? '组合' : '嵌入';
+        h+=`<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;background:var(--red-bg);border:1px solid var(--red);border-radius:2px;font-size:12px">${esc(kw.word)} <span style="color:var(--text-dim);font-size:10px">${esc(kw.category)} · ${ctxLabel}</span></span>`;
+      }
+      h+=`</span></div>`;
+    }
   } else if(t.step==='L2_bert') {
     h+=`<div class="td-row"><span class="td-key">判定:</span> <span class="td-val ${o.label==='unsafe'?'danger':'safe'}">${esc(o.label||'?')}</span></div>`;
     h+=`<div class="td-row"><span class="td-key">置信度:</span> <span class="td-val">${((o.confidence||0)*100).toFixed(2)}%</span></div>`;
@@ -787,6 +956,23 @@ async function pollStats() {
   } catch(e){}
 }
 pollStats(); setInterval(pollStats, 5000);
+async function clearAllCaches() {
+  const btn = event.target;
+  const msg = document.getElementById('cacheMsg');
+  btn.disabled = true; btn.textContent = '清除中...'; msg.textContent = '';
+  try {
+    const r = await fetch('/cache/clear', {method:'POST'});
+    const d = await r.json();
+    msg.textContent = `已清除: 内存${d.layers.L0_memory}条 · ChromaDB${d.layers.L1_chroma}条 · 人审${d.layers.review_queue}条`;
+    msg.style.color = 'var(--green)';
+    pollStats();
+    // Clear batch data so stale detail panels are regenerated
+    window._batchData = null;
+  } catch(e) {
+    msg.textContent = '清除失败: ' + e.message;
+    msg.style.color = 'var(--red)';
+  } finally { btn.disabled = false; btn.textContent = '清除全部缓存'; }
+}
 
 // ===== HUMAN REVIEW =====
 async function loadReviews() {
@@ -899,15 +1085,219 @@ function showBatch(d) {
   let th='<div class="bs"><div class="bs-lbl" style="font-weight:700">层级分布</div></div>';
   for(const [t,c] of Object.entries(d.tier_distribution||{})) th+=`<div class="bs"><div class="bs-num" style="font-size:16px">${c}</div><div class="bs-lbl">${t}</div></div>`;
   document.getElementById('batchTiers').innerHTML=th;
-  const tbody=document.querySelector('#batchTable tbody'); tbody.innerHTML='';
-  for(const r of d.results||[]) {
-    const cls=r.decision==='pass'?'safe':r.decision==='review'?'warn':'danger';
-    const txt=r.decision==='pass'?'PASS':r.decision==='review'?'REVIEW':'BLOCK';
-    tbody.innerHTML+=`<tr><td style="color:var(--text-dim)">${esc(r.content_id||'?').substring(0,12)}</td><td title="${esc(r.reason||'')}">${esc(r.reason||'').substring(0,50)}</td><td><span class="td-val ${cls}" style="font-weight:700">${txt}</span></td><td>${(r.confidence*100).toFixed(0)}%</td><td style="color:var(--text-dim)">${r.tier||'?'}</td><td style="color:var(--text-dim)">${(r.latency_ms||0).toFixed(0)}ms</td></tr>`;
+
+  // Store batch data for expand/collapse
+  window._batchData = d;
+
+  const tbody=document.querySelector('#batchTable tbody');
+  tbody.innerHTML='';
+
+  for(let i=0; i<(d.results||[]).length; i++) {
+    const r = d.results[i];
+    const cls = r.decision==='pass'?'safe':r.decision==='review'?'warn':'danger';
+    const txt = r.decision==='pass'?'PASS':r.decision==='review'?'REVIEW':'BLOCK';
+    const pathLabel = r.path==='hot'?'热':'冷';
+    const pathCls = r.path==='error'?'path-error':(r.path==='hot'?'path-hot':'path-cold');
+    const rid = `br-${i}`;
+
+    // Build expandable row HTML
+    const row = document.createElement('tr');
+    row.className = 'expandable';
+    row.id = rid;
+    // Extract original text from first trace
+    const text = extractText(r);
+
+    row.innerHTML =
+      `<td style="width:24px;text-align:center"><span class="expand-caret">▸</span></td>`+
+      `<td style="color:var(--text-dim)">${esc((r.content_id||'?').substring(0,12))}</td>`+
+      `<td title="${esc(text)}">${esc(text).substring(0,50)}</td>`+
+      `<td><span class="td-val ${cls}" style="font-weight:700">${txt}</span></td>`+
+      `<td>${(r.confidence*100).toFixed(0)}%</td>`+
+      `<td style="color:var(--text-dim)">${esc(r.tier||'?')}</td>`+
+      `<td><span class="path-badge ${pathCls}" style="font-size:10px;padding:2px 8px">${pathLabel}</span></td>`+
+      `<td style="color:var(--text-dim)">${(r.latency_ms||0).toFixed(0)}ms</td>`;
+
+    row.addEventListener('click', function(e) {
+      toggleBatchRow(i, rid, r);
+    });
+    tbody.appendChild(row);
   }
 }
 
+// ---- Batch row expand/collapse ----
+
+function toggleBatchRow(idx, rid, r) {
+  const row = document.getElementById(rid);
+  if (!row) return;
+
+  let dRow = document.getElementById(`${rid}-detail`);
+
+  // Close: hide detail if already open
+  if (dRow && dRow.classList.contains('open')) {
+    row.classList.remove('expanded');
+    dRow.classList.remove('open');
+    return;
+  }
+
+  // Lazy build: create detail row on first click
+  if (!dRow) {
+    dRow = document.createElement('tr');
+    dRow.className = 'batch-detail-row';
+    dRow.id = `${rid}-detail`;
+    dRow.innerHTML = `<td colspan="8">${buildDetailPanel(r)}</td>`;
+    row.parentNode.insertBefore(dRow, row.nextSibling);
+  }
+
+  row.classList.add('expanded');
+  dRow.classList.add('open');
+
+  // Bind click on nested trace cards
+  dRow.querySelectorAll('.trace-step-card').forEach(function(card) {
+    card.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      const inner = card.querySelector('.tsc-detail');
+      if (inner) inner.classList.toggle('open');
+    });
+  });
+}
+
+// ---- Build detail panel HTML ----
+
+function buildDetailPanel(r) {
+  const decisionCls = r.decision==='pass'?'safe':(r.decision==='review'?'warn':'danger');
+  const decisionTxt = r.decision==='pass'?'PASS 通过':(r.decision==='review'?'REVIEW 人审':'BLOCK 拦截');
+  const pathLabel = r.path==='hot'?'HOT 热路径':(r.path==='cold'?'COLD 冷路径':'ERROR');
+  const pathCls = r.path==='error'?'path-error':(r.path==='hot'?'path-hot':'path-cold');
+
+  let html = '<div class="detail-panel">';
+
+  // Content block
+  const traces = r.traces || [];
+  const originalText = extractText(r);
+
+  html += `<div class="detail-content">`;
+  html += `<div class="dc-label"><span>原始内容</span><span style="display:flex;gap:8px"><span class="path-badge ${pathCls}">${pathLabel}</span><span class="tier-badge">${esc(r.tier||'?')}</span></span></div>`;
+  html += `<div class="dc-text">${esc(originalText)}</div>`;
+  html += `</div>`;
+
+  // Stats mini-grid
+  html += `<div class="detail-stats">`;
+  html += `<div class="detail-stat"><div class="ds-val" style="color:${r.decision==='pass'?'var(--green)':r.decision==='review'?'var(--amber)':'var(--red)'}">${decisionTxt}</div><div class="ds-lbl">最终裁定</div></div>`;
+  html += `<div class="detail-stat"><div class="ds-val">${(r.confidence*100).toFixed(1)}%</div><div class="ds-lbl">置信度</div></div>`;
+  html += `<div class="detail-stat"><div class="ds-val">${(r.latency_ms||0).toFixed(0)}ms</div><div class="ds-lbl">端到端延迟</div></div>`;
+  html += `<div class="detail-stat"><div class="ds-val">${traces.length}</div><div class="ds-lbl">Trace 步数</div></div>`;
+  html += `</div>`;
+
+  // Trace timeline
+  html += `<div class="detail-traces">`;
+  html += `<div class="dt-title">审核轨迹 · ${traces.length} 步骤</div>`;
+  html += `<div class="trace-timeline">`;
+
+  for (const t of traces) {
+    const stepLabel = STEP_LABELS[t.step] || t.step || '?';
+    const costCls = 'cost-' + (t.cost || 'zero');
+    const costLabel = t.cost==='zero'?'零成本':(t.cost==='low'?'低成本':'高成本');
+
+    // Determine card type class
+    let cardType = 'miss';
+    if (t.step.includes('hit') || t.step.includes('block') || t.step.includes('pass')) {
+      cardType = t.step.includes('block')?'block':'hit';
+    } else if (t.step==='L3_llm') {
+      cardType = 'llm';
+    }
+
+    html += `<div class="trace-step-card ${cardType}">`;
+    html += `<div class="tsc-header">`;
+    html += `<span class="tsc-node">${esc(t.node||'?')}</span>`;
+    html += `<span class="tsc-step">${stepLabel}</span>`;
+    html += `<span class="tsc-model">${esc(t.model||'')}</span>`;
+
+    // Show matched keywords directly on the card header
+    const out = t.output || {};
+    if (out.matched_keywords && out.matched_keywords.length > 0) {
+      html += `<span style="display:flex;gap:4px;flex-wrap:wrap;margin-left:8px">`;
+      for (const kw of out.matched_keywords) {
+        if (kw.category === 'combo_rule') continue; // skip combo rule label
+        const ctxLabel = kw.context === 'standalone' ? '独立词' : kw.context === 'combo' ? '组合' : '嵌入';
+        html += `<span style="padding:1px 8px;background:var(--red-bg);border:1px solid var(--red);border-radius:2px;font-size:11px;font-weight:700;color:var(--red)">${esc(kw.word)}</span>`;
+      }
+      html += `</span>`;
+    }
+
+    html += `<span class="tsc-meta">`;
+    html += `<span class="tsc-latency">${(t.latency_ms||0).toFixed(1)}ms</span>`;
+    html += `<span class="tsc-cost ${costCls}">${costLabel}</span>`;
+    html += `</span></div>`;
+
+    // Expandable detail
+    html += `<div class="tsc-detail">`;
+    html += `<div class="tscd-row"><span class="tscd-key">输入</span><span class="tscd-val">${esc((t.input||'').substring(0,300))}</span></div>`;
+    if (out.label !== undefined) {
+      const lcls = out.label==='safe'||out.label==='normal'?'safe':'danger';
+      html += `<div class="tscd-row"><span class="tscd-key">标签</span><span class="tscd-val ${lcls}">${esc(String(out.label))}</span></div>`;
+    }
+    if (out.confidence !== undefined) {
+      html += `<div class="tscd-row"><span class="tscd-key">置信度</span><span class="tscd-val">${(out.confidence*100).toFixed(2)}%</span></div>`;
+    }
+    if (out.decision !== undefined) {
+      const dcls = out.decision==='pass'?'safe':'danger';
+      html += `<div class="tscd-row"><span class="tscd-key">决策</span><span class="tscd-val ${dcls}">${esc(String(out.decision))}</span></div>`;
+    }
+    if (out.reason) {
+      html += `<div class="tscd-row"><span class="tscd-key">理由</span><span class="tscd-val">${esc(out.reason)}</span></div>`;
+    }
+    if (out.miss !== undefined) {
+      html += `<div class="tscd-row"><span class="tscd-key">命中</span><span class="tscd-val ${out.miss?'warn':'safe'}">${out.miss?'否':'是 ✓'}</span></div>`;
+    }
+    if (out.similarity !== undefined) {
+      html += `<div class="tscd-row"><span class="tscd-key">相似度</span><span class="tscd-val">${(out.similarity*100).toFixed(2)}%</span></div>`;
+    }
+    if (out.similarity_below_threshold !== undefined) {
+      html += `<div class="tscd-row"><span class="tscd-key">相似度</span><span class="tscd-val warn">低于阈值</span></div>`;
+    }
+    if (out.analysis) {
+      html += `<div class="tscd-row"><span class="tscd-key">分析</span><span class="tscd-val" style="white-space:pre-wrap;line-height:1.8">${esc(out.analysis)}</span></div>`;
+    }
+    if (out.bert_preliminary) {
+      html += `<div class="tscd-row"><span class="tscd-key">BERT预判</span><span class="tscd-val">${esc(out.bert_preliminary)} (${((out.bert_confidence||0)*100).toFixed(0)}%)</span></div>`;
+    }
+    if (out.matched_keywords && out.matched_keywords.length > 0) {
+      html += `<div class="tscd-row"><span class="tscd-key">命中词</span><span class="tscd-val">`;
+      for (const kw of out.matched_keywords) {
+        const ctxLabel = kw.context === 'standalone' ? '独立词' : '嵌入词';
+        const ctxCls = kw.context === 'standalone' ? 'danger' : 'warn';
+        html += `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;background:var(--red-bg);border:1px solid var(--red);border-radius:2px;font-size:12px">${esc(kw.word)} <span style="color:var(--text-dim);font-size:10px">${esc(kw.category)} · ${ctxLabel}</span></span>`;
+      }
+      html += `</span></div>`;
+    }
+    if (out.context && !out.matched_keywords) {
+      html += `<div class="tscd-row"><span class="tscd-key">命中词</span><span class="tscd-val">${esc(Array.isArray(out.context)?out.context.join(', '):String(out.context))}</span></div>`;
+    }
+    if (out.cached !== undefined) {
+      html += `<div class="tscd-row"><span class="tscd-key">已缓存</span><span class="tscd-val ${out.cached?'safe':'warn'}">${out.cached?'是 ✓':'否'}</span></div>`;
+    }
+    if (out.action_taken) {
+      html += `<div class="tscd-row"><span class="tscd-key">动作</span><span class="tscd-val">${esc(out.action_taken)}</span></div>`;
+    }
+    html += `</div>`; // .tsc-detail
+    html += `</div>`; // .trace-step-card
+  }
+
+  html += `</div></div>`; // .trace-timeline / .detail-traces
+  html += `</div>`; // .detail-panel
+
+  return html;
+}
+
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function extractText(r) {
+  const traces = r.traces || [];
+  for (const t of traces) {
+    if (t.input && t.input.trim()) return t.input;
+  }
+  return r.reason || r.content_id || '(无内容)';
+}
 
 // Initial review stats
 (async function(){try{const r=await fetch('/review/stats');const s=await r.json();document.getElementById('rvPending').textContent=s.pending||0;document.getElementById('rvReviewed').textContent=s.reviewed||0;if(s.pending>0){document.getElementById('reviewBadge').classList.remove('hidden');document.getElementById('reviewBadge').textContent=s.pending;}}catch(e){}})();

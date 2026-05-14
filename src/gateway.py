@@ -203,11 +203,31 @@ class Gateway:
         # Standalone keyword (conf=1.0) → block immediately
         if kw["confidence"] > 0.99:
             self.stats["keyword_hit"] += 1
+            matches = kw.get("matches", [])
+            matched_keywords = [{"word": m["word"], "category": m["category"], "context": m["context"]} for m in matches]
+
+            # Include combo words if present
+            combo = kw.get("combo_hit")
+            if combo:
+                for w in combo.get("matched_words", []):
+                    if not any(m["word"] == w for m in matched_keywords):
+                        matched_keywords.append({
+                            "word": w, "category": combo["label"],
+                            "context": "combo",
+                        })
+                matched_keywords.append({
+                    "word": f"[{combo.get('note', '')}]",
+                    "category": "combo_rule",
+                    "context": "combo_trigger",
+                })
+
+            trace_output = {
+                "label": kw["label"],
+                "confidence": 1.0,
+                "matched_keywords": matched_keywords,
+            }
             traces.append(_t("gateway", "keyword_block",
-                "AC自动机 · 独立词", text,
-                {"label": kw["label"], "confidence": 1.0,
-                 "context": [m["context"] for m in kw.get("matches", [])]},
-                kw_ms, "zero"))
+                "AC自动机 · 独立词", text, trace_output, kw_ms, "zero"))
             return self._resolve(
                 {"decision": "block", "confidence": 1.0,
                  "reason": f"Hot-path keyword match: {kw['label']}",
@@ -217,11 +237,11 @@ class Gateway:
 
         # Ambiguous keyword (conf=0.6, embedded in larger word) → escalate
         if kw["confidence"] >= 0.4:
+            matches = kw.get("matches", [])
             traces.append(_t("gateway", "keyword_ambiguous",
                 "AC自动机 · 嵌入词", text,
                 {"label": kw["label"], "confidence": kw["confidence"],
-                 "context": [{"word": m["word"], "context": m["context"]}
-                             for m in kw.get("matches", [])],
+                 "matched_keywords": [{"word": m["word"], "category": m["category"], "context": m["context"]} for m in matches],
                  "reason": "Keyword embedded in larger word → escalate to BERT"},
                 kw_ms, "zero"))
             return self._escalate(traces, keyword_prefiltered=True,
@@ -258,6 +278,18 @@ class Gateway:
                  keyword_prefiltered: bool,
                  kw_label: str | None = None,
                  kw_confidence: float = 0.0) -> dict:
+        # Write to L0 memory cache so next identical request hits instantly
+        # Extract the text from the last trace's input
+        if traces:
+            text = traces[-1].get("input", "")
+            if text and text.strip():
+                memory_cache.set(
+                    text,
+                    decision.get("decision", "pass"),
+                    decision.get("confidence", 1.0),
+                    decision.get("reason", ""),
+                    decision.get("tier", ""),
+                )
         return {
             "decision": decision,
             "traces": traces,

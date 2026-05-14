@@ -59,6 +59,7 @@ class VectorCache:
                 "decision": metadata["decision"],
                 "confidence": metadata["confidence"],
                 "reason": metadata.get("reason", ""),
+                "tier": metadata.get("tier", ""),
                 "similarity": similarity,
             }
 
@@ -72,6 +73,7 @@ class VectorCache:
         decision: str,
         confidence: float,
         reason: str,
+        tier: str = "",
     ):
         """Store a moderation result in the cache."""
         if not embedding or all(v == 0.0 for v in embedding):
@@ -87,6 +89,7 @@ class VectorCache:
                 "decision": decision,
                 "confidence": confidence,
                 "reason": reason,
+                "tier": tier,
             }],
         )
 
@@ -95,6 +98,16 @@ class VectorCache:
         self._ensure_collection()
         doc_id = f"mod_{hash(text) & 0x7FFFFFFF:08x}"
         self._collection.delete(ids=[doc_id])
+
+    def clear(self):
+        """Delete all cached entries."""
+        self._ensure_collection()
+        count = self._collection.count()
+        if count > 0:
+            all_ids = self._collection.get()["ids"]
+            if all_ids:
+                self._collection.delete(ids=all_ids)
+        logger.info("Vector cache cleared (%d entries purged)", count)
 
     def count(self) -> int:
         self._ensure_collection()

@@ -405,6 +405,50 @@ def test_llm_transformers_infer():
     print(f"        label={result['label']} conf={result.get('confidence', 0):.2f}")
 
 
+@register("LLM: SGLang engine (optional)", "coldpath-L3", mandatory=False)
+def test_llm_sglang():
+    from src.config import LLM_PROVIDER
+    if LLM_PROVIDER != "sglang":
+        raise Exception(f"LLM_PROVIDER={LLM_PROVIDER} — set to 'sglang' to test")
+
+    try:
+        import sglang  # noqa: F401
+    except ImportError:
+        raise Exception("sglang not installed: pip install sglang[all]")
+
+    from src.skills.llm_sglang import llm_sglang
+    ok = llm_sglang.warmup()
+    if not ok:
+        raise Exception(llm_sglang.load_info.get("error", "unknown"))
+    info = llm_sglang.load_info
+    print(f"        model={info['model_name']} tp={info['tp_size']} load_time={info['load_time_s']}s")
+
+
+@register("LLM: SGLang inference (small model)", "coldpath-L3", mandatory=False)
+def test_llm_sglang_infer():
+    from src.config import LLM_PROVIDER
+    if LLM_PROVIDER != "sglang":
+        raise Exception(f"LLM_PROVIDER={LLM_PROVIDER} — set to 'sglang' to test")
+    from src.skills.llm_sglang import llm_sglang
+
+    async def call():
+        return await llm_sglang.audit("hello, today is a good day")
+
+    t0 = time.perf_counter()
+    result = asyncio.run(call())
+    ms1 = (time.perf_counter() - t0) * 1000
+
+    # Second call — should hit RadixAttention system prompt cache
+    t1 = time.perf_counter()
+    result2 = asyncio.run(call())
+    ms2 = (time.perf_counter() - t1) * 1000
+
+    assert "label" in result
+    print(f"        call1={ms1:.0f}ms call2={ms2:.0f}ms "
+          f"(Radix speedup: {ms1/max(ms2,1):.1f}x)")
+    print(f"        label={result['label']} conf={result.get('confidence', 0):.2f}")
+
+
 # ============================================================================
 # 8. LangGraph Orchestration
 # ============================================================================

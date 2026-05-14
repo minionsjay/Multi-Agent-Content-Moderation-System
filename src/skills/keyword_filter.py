@@ -115,6 +115,17 @@ class KeywordFilter:
                         raw_matches.append((word, category))
 
         if not raw_matches:
+            # No individual keywords matched, but combos may still hit
+            combo_result = self._check_combos(text, [])
+            if combo_result:
+                return {
+                    "label": combo_result["label"],
+                    "confidence": 1.0,
+                    "matches": [],
+                    "combo_hit": combo_result,
+                    "multi_hit": True,
+                    "category_count": 1,
+                }
             return {"label": None, "confidence": 0.0, "matches": []}
 
         # Check whitelist — only suppress keyword occurrences that fall INSIDE whitelist spans
@@ -175,7 +186,7 @@ class KeywordFilter:
             label = "toxic"
 
         # Check predefined combo phrases (dangerous keyword combinations)
-        combo_result = self._check_combos(validated_matches)
+        combo_result = self._check_combos(text, validated_matches)
         if combo_result:
             # Known dangerous combo → override label, max confidence
             return {
@@ -227,22 +238,36 @@ class KeywordFilter:
             "category_count": num_categories,
         }
 
-    def _check_combos(self, validated_matches: list[dict]) -> dict | None:
-        """Check if matched keywords form a known dangerous combination.
+    def _check_combos(self, text: str, validated_matches: list[dict]) -> dict | None:
+        """Check if the text contains known dangerous word combinations.
 
         A combo is triggered when ALL words in a combo definition appear
         in the text (order-independent, adjacency not required).
 
+        Combo words are matched directly against the text — they don't need
+        to be in the keyword dictionary. This allows combos like
+        ["台湾", "独立"] where the individual words are too common to block,
+        but together they form a clear violation.
+
         Returns combo dict with label + note if hit, None otherwise.
         """
-        if not self.combos or len(validated_matches) < 2:
+        if not self.combos:
             return None
 
-        matched_words_lower = {m["word"].lower() for m in validated_matches}
+        text_lower = text.lower()
+        # Collect all words that appear in the text (keyword matches + combo words)
+        # Use a set for efficient subset checking
+        all_matched = {m["word"].lower() for m in validated_matches}
 
         for combo in self.combos:
             combo_words = {w.lower() for w in combo["words"]}
-            if combo_words.issubset(matched_words_lower):
+            # Scan text directly for each combo word not already matched
+            for w in combo_words:
+                if w not in all_matched:
+                    if w in text_lower:
+                        all_matched.add(w)
+
+            if combo_words.issubset(all_matched):
                 return {
                     "label": combo["label"],
                     "note": combo.get("note", ""),

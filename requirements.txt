@@ -27,6 +27,10 @@ langchain-anthropic>=0.3.0
 # Uses model.generate(), supports any CausalLM model (Qwen2.5, Llama-3, etc.)
 # bitsandbytes>=0.45.0  ← uncomment for 4-bit quantization (recommended)
 
+# Local LLM — SGLang (activate with LLM_PROVIDER=sglang)
+# RadixAttention prefix caching + structured JSON output + continuous batching
+# sglang[all]>=0.3.0  ← uncomment if using SGLang backend
+
 # BERT Inference
 transformers>=4.45.0
 torch>=2.4.0

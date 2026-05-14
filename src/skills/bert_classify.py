@@ -10,7 +10,7 @@ BERT_LOAD_TIMEOUT = 60  # seconds — allow time for model architecture build af
 class BERTClassifier:
     """Text classification using a HuggingFace transformers pipeline.
 
-    Default model: unitary/toxic-bert (fine-tuned BERT-base for toxicity).
+    Default model: KoalaAI/Text-Moderation (fine-tuned for safety classification).
     """
 
     LABEL_MAP = {
@@ -56,7 +56,6 @@ class BERTClassifier:
                     tokenizer=self.model_name,
                     truncation=True,
                     max_length=512,
-                    local_files_only=True,
                 )
                 self._pipeline = future.result(timeout=BERT_LOAD_TIMEOUT)
             # Count layers in a model-agnostic way (handles BERT, RoBERTa, XLM-RoBERTa, etc.)
@@ -154,4 +153,3 @@ class BERTClassifier:
 
 # Singleton
 bert_classifier = BERTClassifier()
-

@@ -83,7 +83,8 @@ class RedisCache:
             self._available = False  # mark down, will retry next call
             return None
 
-    def set(self, text: str, decision: str, confidence: float, reason: str):
+    def set(self, text: str, decision: str, confidence: float, reason: str,
+            tier: str = ""):
         """Store moderation result in Redis with TTL."""
         if not self._ensure_client():
             return
@@ -93,6 +94,7 @@ class RedisCache:
                 "decision": decision,
                 "confidence": confidence,
                 "reason": reason,
+                "tier": tier,
             }, ensure_ascii=False)
             self._client.setex(key, self.ttl, value)
         except Exception as e:

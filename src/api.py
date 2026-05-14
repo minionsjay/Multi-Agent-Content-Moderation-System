@@ -60,6 +60,35 @@ async def startup_warmup():
     except Exception as e:
         log.warning("Transformers LLM warmup failed: %s", e)
 
+    # Warm SGLang engine (if configured)
+    try:
+        if "LLM_PROVIDER" not in dir():  # re-read in case env changed
+            from src.config import LLM_PROVIDER
+        if LLM_PROVIDER == "sglang":
+            from src.skills.llm_sglang import llm_sglang
+            ok = llm_sglang.warmup()
+            if ok:
+                info = llm_sglang.load_info
+                log.info("SGLang engine warmed up (%.1fs, tp=%d)", info["load_time_s"], info["tp_size"])
+            else:
+                log.warning("SGLang warmup failed: %s", llm_sglang.load_info.get("error"))
+    except Exception as e:
+        log.warning("SGLang warmup failed: %s", e)
+
+    # Warm Qwen3Guard (if configured)
+    try:
+        if "LLM_PROVIDER" not in dir():
+            from src.config import LLM_PROVIDER
+        if LLM_PROVIDER == "qwen_guard":
+            from src.skills.llm_qwen_guard import llm_qwen_guard
+            ok = llm_qwen_guard.warmup()
+            if ok:
+                log.info("Qwen3Guard warmed up (%.1fs)", llm_qwen_guard.load_info["load_time_s"])
+            else:
+                log.warning("Qwen3Guard warmup failed: %s", llm_qwen_guard.load_info.get("error"))
+    except Exception as e:
+        log.warning("Qwen3Guard warmup failed: %s", e)
+
     log.info("Startup complete (%.1fs)", time.perf_counter() - t0)
 
 
@@ -87,6 +116,79 @@ async def health(): return {"status": "ok", "version": "0.5.0", "architecture": 
 # ---- Gateway stats ----
 @app.get("/gateway/stats")
 async def gateway_stats(): return gateway.get_stats()
+
+
+# ---- Cache management ----
+@app.get("/cache/stats")
+async def cache_stats():
+    """Return cache status for all layers."""
+    from src.skills.memory_cache import memory_cache
+    from src.skills.vector_cache import vector_cache
+    from src.skills.redis_cache import redis_cache
+    return {
+        "L0_memory": {
+            "entries": memory_cache.size,
+            "hits": memory_cache.hits,
+            "misses": memory_cache.misses,
+            "hit_rate": round(memory_cache.hit_rate, 4),
+        },
+        "L0b_redis": {
+            "status": redis_cache.status,
+            "hits": redis_cache.hits,
+            "misses": redis_cache.misses,
+        },
+        "L1_chroma": {
+            "entries": vector_cache.count(),
+            "persist_dir": vector_cache.persist_dir,
+        },
+    }
+
+
+@app.post("/cache/clear")
+async def cache_clear():
+    """Clear all cache layers (memory + ChromaDB + review queue)."""
+    import os
+    cleared = {}
+
+    # L0a: Memory cache
+    from src.skills.memory_cache import memory_cache
+    mem_size = memory_cache.size
+    memory_cache.clear()
+    cleared["L0_memory"] = mem_size
+
+    # L1: ChromaDB
+    from src.skills.vector_cache import vector_cache
+    chroma_count = vector_cache.count()
+    try:
+        vector_cache.clear()
+        cleared["L1_chroma"] = chroma_count
+    except Exception as e:
+        cleared["L1_chroma"] = f"error: {e}"
+
+    # Review queue
+    from src.skills.review_queue import review_queue
+    review_path = review_queue.path
+    review_removed = 0
+    try:
+        if os.path.exists(review_path):
+            review_removed = review_queue.get_stats().get("total", 0)
+            os.remove(review_path)
+        cleared["review_queue"] = review_removed
+    except Exception as e:
+        cleared["review_queue"] = f"error: {e}"
+
+    # Event store
+    events_removed = 0
+    try:
+        event_path = os.getenv("EVENT_STORE_PATH", "./data/moderation_events.jsonl")
+        if os.path.exists(event_path):
+            events_removed = 1
+            os.remove(event_path)
+        cleared["events"] = events_removed
+    except Exception:
+        cleared["events"] = 0
+
+    return {"status": "cleared", "layers": cleared}
 
 
 # ---- Human Review ----
@@ -135,13 +237,13 @@ async def review_resolve(req: dict):
     confidence = 1.0  # human decision is authoritative
     if text and text.strip():
         # L0a: local cache
-        memory_cache.set(text, human_decision, confidence, reason)
+        memory_cache.set(text, human_decision, confidence, reason, "human_review")
         # L0b: Redis
-        redis_cache.set(text, human_decision, confidence, reason)
+        redis_cache.set(text, human_decision, confidence, reason, "human_review")
         # L1: ChromaDB (async — fire and forget in POC)
         try:
             embedding = embedder.embed(text)
-            vector_cache.store(embedding, text, human_decision, confidence, reason)
+            vector_cache.store(embedding, text, human_decision, confidence, reason, "human_review")
         except Exception:
             pass
 
@@ -188,6 +290,8 @@ async def moderate(req: ModerationRequest) -> dict:
         resp["latency_ms"] = round((time.perf_counter() - t0) * 1000, 2)
         resp["traces"] = gw["traces"]
         resp["path"] = "hot"
+        if "tier" not in resp:
+            resp["tier"] = gw["decision"].get("tier", "cached")
         return resp
 
     # === COLD PATH: Gateway escalated → run LangGraph ===
@@ -272,9 +376,9 @@ async def moderate_batch(file: UploadFile = File(...)):
     sem = asyncio.Semaphore(1)  # limit LLM concurrency to avoid rate limits
 
     async def process_one(item):
-        async with sem:
-            t_item = time.perf_counter()
-            # Gateway first
+        t_item = time.perf_counter()
+        try:
+            # Gateway first (synchronous, no semaphore needed)
             gw = gateway.check(item["text"], item.get("image_url", ""))
             if gw["decision"] is not None:
                 resp = dict(gw["decision"])
@@ -282,17 +386,45 @@ async def moderate_batch(file: UploadFile = File(...)):
                 resp["path"] = "hot"
                 resp["traces"] = gw["traces"]
                 resp["latency_ms"] = round((time.perf_counter() - t_item) * 1000, 2)
+                # Ensure tier is always present (cached results may lack it)
+                if "tier" not in resp:
+                    resp["tier"] = gw["decision"].get("tier", "cached")
                 return resp
-            # Cold path
-            state = _make_state(
-                ModerationRequest(content_id=item["id"], text=item["text"]),
-                item["text"], gw)
-            result = await graph.ainvoke(state)
-            resp = _format_response(item["id"], result, time.perf_counter() - t_item, "cold")
-            resp["traces"] = gw["traces"] + resp["traces"]
-            return resp
+            # Cold path — semaphore protects LLM call
+            async with sem:
+                state = _make_state(
+                    ModerationRequest(content_id=item["id"], text=item["text"]),
+                    item["text"], gw)
+                result = await graph.ainvoke(state)
+                resp = _format_response(item["id"], result, time.perf_counter() - t_item, "cold")
+                resp["traces"] = gw["traces"] + resp["traces"]
+                return resp
+        except Exception as e:
+            logger.error("Batch item %s failed: %s", item.get("id", "?"), e)
+            return {
+                "content_id": item.get("id", "?"),
+                "decision": "error",
+                "confidence": 0.0,
+                "reason": f"Processing error: {e}",
+                "tier": "error",
+                "latency_ms": round((time.perf_counter() - t_item) * 1000, 2),
+                "traces": [],
+                "path": "error",
+            }
 
-    results = await asyncio.gather(*[process_one(t) for t in texts])
+    results = await asyncio.gather(*[process_one(t) for t in texts], return_exceptions=True)
+    # Filter out unhandled exceptions (shouldn't happen with try/except, but belt-and-suspenders)
+    safe_results = []
+    for r in results:
+        if isinstance(r, Exception):
+            safe_results.append({
+                "content_id": "unknown", "decision": "error", "confidence": 0.0,
+                "reason": f"Unhandled error: {r}", "tier": "error",
+                "latency_ms": 0, "traces": [], "path": "error",
+            })
+        else:
+            safe_results.append(r)
+    results = safe_results
     total_ms = (time.perf_counter() - t0) * 1000
 
     passed = sum(1 for r in results if r["decision"] == "pass")
@@ -302,7 +434,8 @@ async def moderate_batch(file: UploadFile = File(...)):
     cold = sum(1 for r in results if r.get("path") == "cold")
     tiers = {}
     for r in results:
-        tiers[r["tier"]] = tiers.get(r["tier"], 0) + 1
+        t = r.get("tier", "unknown")
+        tiers[t] = tiers.get(t, 0) + 1
 
     return {
         "total": len(results),
