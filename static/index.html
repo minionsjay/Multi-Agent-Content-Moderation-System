@@ -433,6 +433,24 @@ select { background:var(--bg); border:1px solid var(--border); color:var(--text)
 .trace-step-card .tsc-detail .tscd-val { color:var(--text-bright); word-break:break-all; }
 .trace-step-card .tsc-detail .tscd-val.danger { color:var(--red); }
 .trace-step-card .tsc-detail .tscd-val.safe { color:var(--green); }
+
+/* ---- Decision config sliders ---- */
+.dc-section { margin-bottom:10px; }
+.dc-section-title { font-size:11px; color:var(--cyan); letter-spacing:1px; font-weight:700; margin-bottom:6px; border-bottom:1px solid var(--border); padding-bottom:4px; }
+.dc-row { display:flex; align-items:center; gap:8px; margin:4px 0; }
+.dc-row .dc-label { font-size:11px; color:var(--text-dim); min-width:60px; flex-shrink:0; }
+.dc-row input[type=range] { flex:1; -webkit-appearance:none; height:4px; background:var(--border); border-radius:2px; outline:none; }
+.dc-row input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:var(--green); cursor:pointer; }
+.dc-row .dc-val { font-family:var(--font-mono); font-size:12px; color:var(--green); min-width:36px; text-align:right; }
+.dc-check { display:flex; gap:12px; flex-wrap:wrap; }
+.dc-check label { font-size:11px; color:var(--text-dim); cursor:pointer; display:flex; align-items:center; gap:3px; }
+.dc-check input[type=checkbox] { accent-color: var(--green); }
+
+/* ---- Batch progress bar ---- */
+.progress-wrap { margin:12px 0; }
+.progress-bar { width:100%; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+.progress-bar .progress-fill { height:100%; background:var(--green); border-radius:3px; transition:width 0.3s; width:0%; }
+.progress-text { display:flex; justify-content:space-between; font-size:12px; color:var(--text-dim); margin-top:4px; }
 </style>
 </head>
 <body>
@@ -676,6 +694,19 @@ select { background:var(--bg); border:1px solid var(--border); color:var(--text)
         </select>
         <input type="text" id="llmModelCustom" placeholder="输入模型路径或 HF ID，如 /path/to/model" style="display:none;margin-top:4px" oninput="updateCfgLabel()" />
         <div id="cfgLabel" style="font-size:11px;color:var(--green);margin-top:6px"></div>
+      </div>
+    </div>
+
+    <!-- Decision Strategy Config -->
+    <div class="card">
+      <div class="card-head" style="cursor:pointer" onclick="toggleDecisionCfg()"><span>决策策略</span><span id="dcCaret">▸</span></div>
+      <div class="card-body hidden" id="dcBody">
+        <div id="dcContent" style="font-size:12px;color:var(--text-dim)">加载中...</div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-sm" onclick="applyDecisionConfig()" style="color:var(--green);border-color:var(--green)">应用</button>
+          <button class="btn btn-sm" onclick="resetDecisionConfig()" style="color:var(--red);border-color:var(--red)">重置默认</button>
+        </div>
+        <div id="dcMsg" style="font-size:11px;margin-top:6px"></div>
       </div>
     </div>
   </div>
@@ -974,6 +1005,147 @@ async function clearAllCaches() {
   } finally { btn.disabled = false; btn.textContent = '清除全部缓存'; }
 }
 
+// ===== DECISION CONFIG =====
+function toggleDecisionCfg() {
+  const b = document.getElementById('dcBody');
+  const c = document.getElementById('dcCaret');
+  b.classList.toggle('hidden');
+  c.textContent = b.classList.contains('hidden') ? '▸' : '▾';
+  if (!b.classList.contains('hidden')) loadDecisionConfig();
+}
+
+async function loadDecisionConfig() {
+  const el = document.getElementById('dcContent');
+  try {
+    const r = await fetch('/decision/config');
+    const cfg = await r.json();
+    window._dcData = cfg;
+    el.innerHTML = buildDecisionUI(cfg);
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--red)">加载失败: ${e.message}</span>`;
+  }
+}
+
+function buildDecisionUI(cfg) {
+  let h = '';
+
+  // Agent weights
+  h += '<div class="dc-section"><div class="dc-section-title">Agent 权重</div>';
+  for (const [k, v] of Object.entries(cfg.agent_weights || {})) {
+    h += dcSlider(`权重_${k}`, k, v, 0, 1, 0.01);
+  }
+  h += '</div>';
+
+  // Label severity
+  h += '<div class="dc-section"><div class="dc-section-title">标签严重度</div>';
+  for (const [k, v] of Object.entries(cfg.label_severity || {})) {
+    h += dcSlider(`严重度_${k}`, k, v, 0, 1, 0.01);
+  }
+  h += '</div>';
+
+  // Score thresholds
+  h += '<div class="dc-section"><div class="dc-section-title">分数阈值</div>';
+  for (const [k, v] of Object.entries(cfg.score_thresholds || {})) {
+    h += dcSlider(`阈值_${k}`, k, v, 0, 1, 0.01);
+  }
+  h += '</div>';
+
+  // Grey zone
+  h += '<div class="dc-section"><div class="dc-section-title">灰度区</div>';
+  h += dcSlider('灰区下限', 'grey_low', cfg.grey_zone?.low ?? 0.3, 0, 1, 0.01);
+  h += dcSlider('灰区上限', 'grey_high', cfg.grey_zone?.high ?? 0.7, 0, 1, 0.01);
+  h += '</div>';
+
+  // BERT thresholds
+  h += '<div class="dc-section"><div class="dc-section-title">BERT 阈值</div>';
+  h += dcSlider('BERT高置信', 'bert_high', cfg.bert_high_confidence ?? 0.95, 0.5, 1, 0.01);
+  h += dcSlider('BERT低置信', 'bert_low', cfg.bert_low_confidence ?? 0.4, 0, 1, 0.01);
+  h += '</div>';
+
+  // Zero tolerance
+  h += '<div class="dc-section"><div class="dc-section-title">零容忍类别</div>';
+  h += '<div class="dc-check">';
+  const allCats = ['politics', 'violence', 'porn', 'gambling', 'toxic', 'spam'];
+  const zt = cfg.zero_tolerance || [];
+  for (const cat of allCats) {
+    const checked = zt.includes(cat) ? 'checked' : '';
+    h += `<label><input type="checkbox" class="dc-zt" value="${cat}" ${checked}>${cat}</label>`;
+  }
+  h += '</div></div>';
+
+  return h;
+}
+
+function dcSlider(id, label, value, min, max, step) {
+  return `<div class="dc-row">
+    <span class="dc-label">${label}</span>
+    <input type="range" id="dc-${id}" min="${min}" max="${max}" step="${step}" value="${value}" oninput="document.getElementById('dcv-${id}').textContent=this.value">
+    <span class="dc-val" id="dcv-${id}">${Number(value).toFixed(2)}</span>
+  </div>`;
+}
+
+async function applyDecisionConfig() {
+  const cfg = window._dcData;
+  if (!cfg) return;
+  const msg = document.getElementById('dcMsg');
+
+  // Collect slider values
+  const updates = { agent_weights: {}, label_severity: {}, score_thresholds: {}, grey_zone: {} };
+
+  for (const [k] of Object.entries(cfg.agent_weights || {})) {
+    const el = document.getElementById(`dc-权重_${k}`);
+    if (el) updates.agent_weights[k] = parseFloat(el.value);
+  }
+  for (const [k] of Object.entries(cfg.label_severity || {})) {
+    const el = document.getElementById(`dc-严重度_${k}`);
+    if (el) updates.label_severity[k] = parseFloat(el.value);
+  }
+  for (const [k] of Object.entries(cfg.score_thresholds || {})) {
+    const el = document.getElementById(`dc-阈值_${k}`);
+    if (el) updates.score_thresholds[k] = parseFloat(el.value);
+  }
+  const gzLow = document.getElementById('dc-灰区下限');
+  const gzHigh = document.getElementById('dc-灰区上限');
+  if (gzLow) updates.grey_zone.low = parseFloat(gzLow.value);
+  if (gzHigh) updates.grey_zone.high = parseFloat(gzHigh.value);
+
+  const bh = document.getElementById('dc-BERT高置信');
+  const bl = document.getElementById('dc-BERT低置信');
+  if (bh) updates.bert_high_confidence = parseFloat(bh.value);
+  if (bl) updates.bert_low_confidence = parseFloat(bl.value);
+
+  updates.zero_tolerance = [];
+  document.querySelectorAll('.dc-zt:checked').forEach(cb => updates.zero_tolerance.push(cb.value));
+
+  try {
+    const r = await fetch('/decision/config', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(updates),
+    });
+    const newCfg = await r.json();
+    window._dcData = newCfg;
+    msg.textContent = '已应用 ✓';
+    msg.style.color = 'var(--green)';
+  } catch(e) {
+    msg.textContent = '应用失败: ' + e.message;
+    msg.style.color = 'var(--red)';
+  }
+}
+
+async function resetDecisionConfig() {
+  try {
+    const r = await fetch('/decision/config/reset', {method:'POST'});
+    const cfg = await r.json();
+    window._dcData = cfg;
+    document.getElementById('dcContent').innerHTML = buildDecisionUI(cfg);
+    document.getElementById('dcMsg').textContent = '已重置为默认值 ✓';
+    document.getElementById('dcMsg').style.color = 'var(--green)';
+  } catch(e) {
+    document.getElementById('dcMsg').textContent = '重置失败: ' + e.message;
+    document.getElementById('dcMsg').style.color = 'var(--red)';
+  }
+}
+
 // ===== HUMAN REVIEW =====
 async function loadReviews() {
   const list = document.getElementById('reviewList');
@@ -1060,16 +1232,129 @@ function handleFile(e){const f=e.target.files[0];if(f)uploadBatch(f);}
 
 async function uploadBatch(file) {
   document.getElementById('batchFile').textContent='已选择: '+file.name;
-  document.getElementById('bStatus').textContent='处理中...';
-  document.getElementById('batchResults').classList.add('hidden');
+  document.getElementById('bStatus').textContent='';
+  document.getElementById('batchResults').classList.remove('hidden');
+
+  // Add progress bar
+  const card = document.getElementById('batchResults');
+  let progDiv = document.getElementById('batchProgress');
+  if (!progDiv) {
+    progDiv = document.createElement('div');
+    progDiv.id = 'batchProgress';
+    progDiv.className = 'card';
+    progDiv.innerHTML = `<div class="card-head">处理进度</div><div class="card-body"><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" id="progFill"></div></div><div class="progress-text"><span id="progLabel">0 / 0</span><span id="progPct">0%</span></div></div></div></div>`;
+    card.insertBefore(progDiv, card.firstChild);
+  }
+  document.getElementById('progFill').style.width = '0%';
+  document.getElementById('progLabel').textContent = '0 / 0';
+  document.getElementById('progPct').textContent = '0%';
+
+  // Show empty table
+  showBatch({total:0, passed:0, blocked:0, reviewed:0, avg_latency_ms:0, llm_call_rate:0, hot_path_rate:0, tier_distribution:{}, results:[]});
+
   const fd = new FormData(); fd.append('file',file);
   try {
-    const res = await fetch('/moderate/batch',{method:'POST',body:fd});
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.detail||'Upload failed');
-    showBatch(data);
-    document.getElementById('bStatus').textContent=`完成: ${data.total} 条 · ${data.total_latency_ms.toFixed(0)}ms`;
-  } catch(e) { document.getElementById('bStatus').textContent='错误: '+e.message; }
+    const res = await fetch('/moderate/batch/stream', {method:'POST', body:fd});
+    if (!res.ok) throw new Error((await res.text()) || 'Upload failed');
+
+    const results = [];
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, {stream:true});
+      const lines = buf.split('\n'); buf = lines.pop() || '';
+      for (const l of lines) {
+        if (!l.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(l.slice(6));
+          if (data.event === 'item') {
+            results.push(data.result);
+            // Update progress bar
+            const pct = (data.progress * 100).toFixed(0);
+            document.getElementById('progFill').style.width = pct + '%';
+            document.getElementById('progLabel').textContent = `${data.completed} / ${data.total}`;
+            document.getElementById('progPct').textContent = pct + '%';
+            document.getElementById('bStatus').textContent = `处理中... ${data.elapsed_ms}ms`;
+            // Live update table
+            updateBatchTable(results);
+          } else if (data.event === 'done') {
+            document.getElementById('bStatus').textContent = `完成: ${data.total} 条 · ${data.elapsed_ms}ms`;
+            // Remove progress bar
+            if (progDiv) progDiv.remove();
+            // Final summary
+            updateBatchSummary(results);
+          } else if (data.event === 'error') {
+            throw new Error(data.error || 'Unknown error');
+          }
+        } catch(e) {}
+      }
+    }
+  } catch(e) {
+    document.getElementById('bStatus').textContent = '错误: ' + e.message;
+  }
+}
+
+// ---- Live batch table update ----
+const _batchResultMap = {};
+function updateBatchTable(results) {
+  // Update only the latest results
+  const tbody = document.querySelector('#batchTable tbody');
+  if (!tbody) return;
+  for (const r of results) {
+    const rid = r.content_id || '?';
+    if (_batchResultMap[rid]) continue; // already rendered
+    _batchResultMap[rid] = true;
+    const cls = r.decision==='pass'?'safe':r.decision==='review'?'warn':'danger';
+    const txt = r.decision==='pass'?'PASS':r.decision==='review'?'REVIEW':'BLOCK';
+    const pathLabel = r.path==='hot'?'热':'冷';
+    const pathCls = r.path==='error'?'path-error':(r.path==='hot'?'path-hot':'path-cold');
+    const text = extractText(r);
+    const tr = document.createElement('tr');
+    tr.className = 'expandable';
+    tr.id = `br-${results.length}`;
+    tr.innerHTML = `<td style="width:24px;text-align:center"><span class="expand-caret">▸</span></td>`+
+      `<td style="color:var(--text-dim)">${esc((r.content_id||'?').substring(0,12))}</td>`+
+      `<td>${esc(text).substring(0,50)}</td>`+
+      `<td><span class="td-val ${cls}" style="font-weight:700">${txt}</span></td>`+
+      `<td>${(r.confidence*100).toFixed(0)}%</td>`+
+      `<td style="color:var(--text-dim)">${esc(r.tier||'?')}</td>`+
+      `<td><span class="path-badge ${pathCls}" style="font-size:10px;padding:2px 8px">${pathLabel}</span></td>`+
+      `<td style="color:var(--text-dim)">${(r.latency_ms||0).toFixed(0)}ms</td>`;
+    tr.addEventListener('click', function() {
+      toggleBatchRow(results.length - 1, tr.id, r);
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+function updateBatchSummary(results) {
+  const total = results.length;
+  if (total === 0) return;
+  const passed = results.filter(r => r.decision === 'pass').length;
+  const blocked = results.filter(r => r.decision === 'block').length;
+  const reviewed = results.filter(r => r.decision === 'review').length;
+  const hot = results.filter(r => r.path === 'hot').length;
+  const cold = results.filter(r => r.path === 'cold').length;
+  const tierDist = {};
+  for (const r of results) { const t = r.tier || '?'; tierDist[t] = (tierDist[t] || 0) + 1; }
+  const llmCallRate = (tierDist['L3_llm'] || 0) / total;
+  const hotRate = hot / total;
+
+  document.getElementById('batchSummary').innerHTML =
+    `<div class="bs"><div class="bs-num" style="color:var(--text-bright)">${total}</div><div class="bs-lbl">总数</div></div>`+
+    `<div class="bs"><div class="bs-num" style="color:var(--green)">${passed}</div><div class="bs-lbl">通过</div></div>`+
+    `<div class="bs"><div class="bs-num" style="color:var(--red)">${blocked}</div><div class="bs-lbl">拦截</div></div>`+
+    `<div class="bs"><div class="bs-num" style="color:var(--amber)">${reviewed}</div><div class="bs-lbl">复核</div></div>`+
+    `<div class="bs"><div class="bs-num" style="color:var(--blue)">${hot}</div><div class="bs-lbl">热路径</div></div>`+
+    `<div class="bs"><div class="bs-num" style="color:var(--purple)">${(llmCallRate*100).toFixed(1)}%</div><div class="bs-lbl">LLM调用率</div></div>`;
+  let th = '<div class="bs"><div class="bs-lbl" style="font-weight:700">层级分布</div></div>';
+  for (const [t,c] of Object.entries(tierDist)) th += `<div class="bs"><div class="bs-num" style="font-size:16px">${c}</div><div class="bs-lbl">${t}</div></div>`;
+  document.getElementById('batchTiers').innerHTML = th;
+  window._batchData = {total, passed, blocked, reviewed, hot_path: hot, cold_path: cold, llm_call_rate: llmCallRate, hot_path_rate: hotRate, tier_distribution: tierDist, results};
 }
 
 function showBatch(d) {

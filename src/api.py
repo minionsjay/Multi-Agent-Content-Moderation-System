@@ -191,6 +191,32 @@ async def cache_clear():
     return {"status": "cleared", "layers": cleared}
 
 
+# ---- Decision config (runtime adjustable) ----
+@app.get("/decision/config")
+async def get_decision_config():
+    """Return current decision agent parameters."""
+    from src.skills.decision_config import get_config
+    return get_config()
+
+
+@app.post("/decision/config")
+async def update_decision_config(updates: dict):
+    """Update decision agent parameters at runtime.
+
+    Body: partial config dict, e.g.:
+      {"grey_zone": {"low": 0.25, "high": 0.65}, "bert_high_confidence": 0.92}
+    """
+    from src.skills.decision_config import update_config
+    return update_config(updates)
+
+
+@app.post("/decision/config/reset")
+async def reset_decision_config():
+    """Reset decision agent parameters to defaults."""
+    from src.skills.decision_config import reset_config
+    return reset_config()
+
+
 # ---- Human Review ----
 @app.get("/review/pending")
 async def review_pending(limit: int = 50):
@@ -363,7 +389,85 @@ async def moderate_stream(req: ModerationRequest):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-# ---- Batch (with gateway) ----
+# ---- Batch SSE streaming (with progress) ----
+@app.post("/moderate/batch/stream")
+async def moderate_batch_stream(file: UploadFile = File(...)):
+    t0 = time.perf_counter()
+    content = await file.read()
+    texts = _parse_upload(content, file.filename or "")
+
+    if not texts:
+        return StreamingResponse(
+            _sse_event("error", {"error": "No valid texts found in file", "total": 0}),
+            media_type="text/event-stream",
+        )
+
+    total = len(texts)
+    sem = asyncio.Semaphore(1)
+
+    async def process_one(item):
+        t_item = time.perf_counter()
+        try:
+            gw = gateway.check(item["text"], item.get("image_url", ""))
+            if gw["decision"] is not None:
+                resp = dict(gw["decision"])
+                resp["content_id"] = item["id"]
+                resp["path"] = "hot"
+                resp["traces"] = gw["traces"]
+                resp["latency_ms"] = round((time.perf_counter() - t_item) * 1000, 2)
+                if "tier" not in resp:
+                    resp["tier"] = gw["decision"].get("tier", "cached")
+                return resp
+            async with sem:
+                state = _make_state(
+                    ModerationRequest(content_id=item["id"], text=item["text"]),
+                    item["text"], gw)
+                result = await graph.ainvoke(state)
+                resp = _format_response(item["id"], result, time.perf_counter() - t_item, "cold")
+                resp["traces"] = gw["traces"] + resp["traces"]
+                return resp
+        except Exception as e:
+            logger.error("Batch item %s failed: %s", item.get("id", "?"), e)
+            return {
+                "content_id": item.get("id", "?"), "decision": "error",
+                "confidence": 0.0, "reason": f"Processing error: {e}",
+                "tier": "error",
+                "latency_ms": round((time.perf_counter() - t_item) * 1000, 2),
+                "traces": [], "path": "error",
+            }
+
+    async def event_stream():
+        completed = 0
+        # Process items as they complete, yield progress events
+        tasks = [process_one(t) for t in texts]
+        for coro in asyncio.as_completed(tasks):
+            r = await coro
+            if isinstance(r, Exception):
+                r = {"content_id": "unknown", "decision": "error", "confidence": 0.0,
+                     "reason": f"Unhandled error: {r}", "tier": "error",
+                     "latency_ms": 0, "traces": [], "path": "error"}
+            completed += 1
+            yield _sse_event("item", {
+                "result": r,
+                "completed": completed,
+                "total": total,
+                "progress": round(completed / total, 4),
+                "elapsed_ms": round((time.perf_counter() - t0) * 1000, 0),
+            })
+
+        # Build final summary
+        elapsed = (time.perf_counter() - t0) * 1000
+        # Gather all results for summary (re-process, they were already yielded)
+        # We compute summary from the last known state
+        yield _sse_event("done", {
+            "total": total,
+            "elapsed_ms": round(elapsed, 0),
+        })
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# ---- Batch (standard, non-streaming) ----
 @app.post("/moderate/batch")
 async def moderate_batch(file: UploadFile = File(...)):
     t0 = time.perf_counter()
@@ -452,6 +556,11 @@ async def moderate_batch(file: UploadFile = File(...)):
 
 
 # ---- Helpers ----
+
+def _sse_event(event: str, data: dict) -> str:
+    """Build an SSE event string."""
+    return f"data: {json.dumps({'event': event, **data}, ensure_ascii=False)}\n\n"
+
 
 def _resolve_text(req: ModerationRequest) -> str:
     text = req.text.strip()

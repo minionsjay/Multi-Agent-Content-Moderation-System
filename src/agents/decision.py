@@ -1,37 +1,15 @@
 import time
 import logging
 from src.state import ModerationState
-from src.config import GREY_ZONE_LOW, GREY_ZONE_HIGH
+from src.skills.decision_config import get_config
 
 logger = logging.getLogger(__name__)
-
-ZERO_TOLERANCE = ["politics", "violence"]
-
-# Severity score mapping: higher = more severe
-LABEL_SEVERITY = {
-    "safe": 0.0,
-    "normal": 0.0,
-    "spam": 0.3,
-    "toxic": 0.5,
-    "gambling": 0.6,
-    "porn": 0.8,
-    "nsfw": 0.85,
-    "violence": 0.9,
-    "politics": 1.0,
-    "unsafe": 0.7,  # generic fallback
-}
-
-# Agent weights (CLAUDE.md design: Text 40%, Image 35%, Multimodal 25%)
-AGENT_WEIGHTS = {
-    "text": 0.40,
-    "image": 0.35,
-    "multimodal": 0.25,
-}
 
 
 async def decision_aggregator(state: ModerationState) -> dict:
     t0 = time.perf_counter()
     traces = []
+    cfg = get_config()  # live config (adjustable via API/frontend)
 
     # Path 1: Cache hit
     if state.get("cache_hit") and state.get("cached_decision"):
@@ -49,7 +27,8 @@ async def decision_aggregator(state: ModerationState) -> dict:
     # Path 2: Gateway/Triage pre-set decision (keyword hit, cache hit carried forward)
     if state.get("keyword_confidence", 0) > 0.99:
         label = state.get("keyword_label", "unsafe")
-        if label in ZERO_TOLERANCE:
+        zero_tol = cfg.get("zero_tolerance", ["politics", "violence"])
+        if label in zero_tol:
             traces.append(_trace("decision", "zero_tolerance", "none",
                                 f"Bypass: category={label}", {"decision": "block"},
                                 (time.perf_counter() - t0) * 1000, "zero"))
@@ -57,7 +36,6 @@ async def decision_aggregator(state: ModerationState) -> dict:
                     "reason": state.get("reason", "Zero-tolerance policy"),
                     "traces": traces}
         else:
-            # Non-zero-tolerance keyword at high confidence → still block
             traces.append(_trace("decision", "keyword_high_conf", "none",
                                 f"Keyword match: {label} (conf=1.0)", {"decision": "block"},
                                 (time.perf_counter() - t0) * 1000, "zero"))
@@ -89,17 +67,22 @@ async def decision_aggregator(state: ModerationState) -> dict:
                 "reason": "No text moderation result", "traces": traces}
 
     # --- Weighted score aggregation ---
-    label, confidence, tier = _aggregate_signals(text_result, image_result, multimodal_result)
+    label, confidence, tier = _aggregate_signals(text_result, image_result, multimodal_result, cfg)
 
     traces.append(_trace("decision", "aggregate", "weighted_scoring",
                         f"Weighted: label={label}, confidence={confidence:.4f}, tier={tier}",
                         {"label": label, "confidence": confidence, "tier": tier,
                          "text_label": text_result.get("label"), "text_conf": text_result.get("confidence"),
-                         "image_label": image_result.get("label"), "image_conf": image_result.get("confidence")},
+                         "image_label": image_result.get("label"), "image_conf": image_result.get("confidence"),
+                         "agent_weights": cfg.get("agent_weights", {}),
+                         "label_severity": cfg.get("label_severity", {}),
+                         "score_thresholds": cfg.get("score_thresholds", {}),
+                         "grey_zone": cfg.get("grey_zone", {})},
                         (time.perf_counter() - t0) * 1000, "zero"))
 
     # Zero-tolerance override
-    if label in ZERO_TOLERANCE:
+    zero_tol = cfg.get("zero_tolerance", ["politics", "violence"])
+    if label in zero_tol:
         return {"decision": "block", "confidence": confidence,
                 "reason": text_result.get("reason", f"Zero-tolerance: {label}"),
                 "traces": traces}
@@ -114,20 +97,24 @@ async def decision_aggregator(state: ModerationState) -> dict:
                 "reason": text_result.get("reason", "Content classified as safe"),
                 "traces": traces}
 
+    gz = cfg.get("grey_zone", {"low": 0.3, "high": 0.7})
+    gz_low = gz["low"]
+    gz_high = gz["high"]
+
     # Grey zone: uncertain unsafe → human review
-    if GREY_ZONE_LOW <= confidence <= GREY_ZONE_HIGH:
+    if gz_low <= confidence <= gz_high:
         traces.append(_trace("decision", "grey_zone", "none",
-                            f"Confidence {confidence:.2f} in [{GREY_ZONE_LOW}, {GREY_ZONE_HIGH}] → review",
+                            f"Confidence {confidence:.2f} in [{gz_low}, {gz_high}] → review",
                             {"decision": "review"},
                             (time.perf_counter() - t0) * 1000, "zero"))
         return {"decision": "review", "confidence": confidence,
                 "reason": text_result.get("reason", "Grey zone — needs human review"),
                 "traces": traces}
 
-    # Low confidence unsafe → pass (宁可放过，避免误杀)
-    if confidence < GREY_ZONE_LOW:
+    # Low confidence unsafe → pass
+    if confidence < gz_low:
         traces.append(_trace("decision", "low_confidence_pass", "none",
-                            f"Confidence {confidence:.2f} < {GREY_ZONE_LOW} → pass (avoid false positive)",
+                            f"Confidence {confidence:.2f} < {gz_low} → pass (avoid false positive)",
                             {"decision": "pass"},
                             (time.perf_counter() - t0) * 1000, "zero"))
         return {"decision": "pass", "confidence": confidence,
@@ -146,38 +133,36 @@ async def decision_aggregator(state: ModerationState) -> dict:
 
 
 def _aggregate_signals(text_result: dict | None, image_result: dict,
-                       multimodal_result: dict) -> tuple[str, float, str]:
-    """Weighted score aggregation per CLAUDE.md design.
-
-    Weights: Text 40%, Image 35%, Multimodal 25%.
-    Weights are re-normalized if some agents didn't run.
-    """
+                       multimodal_result: dict, cfg: dict) -> tuple[str, float, str]:
+    """Weighted score aggregation using live config."""
     scores = []
     weights = []
     min_conf = 1.0
+    agent_weights = cfg.get("agent_weights", {"text": 0.4, "image": 0.35, "multimodal": 0.25})
+    severity = cfg.get("label_severity", {})
 
     if text_result:
         tl = text_result.get("label", "safe")
         tc = text_result.get("confidence", 0.5)
-        scores.append(LABEL_SEVERITY.get(tl, 0.5) * tc)
-        weights.append(AGENT_WEIGHTS["text"])
+        scores.append(severity.get(tl, 0.5) * tc)
+        weights.append(agent_weights["text"])
         min_conf = min(min_conf, tc)
 
     if image_result:
         il = image_result.get("label", "normal")
         ic = image_result.get("confidence", 0.5)
         if il == "nsfw" and ic > 0.5:
-            scores.append(LABEL_SEVERITY["nsfw"] * ic)
+            scores.append(severity.get("nsfw", 0.85) * ic)
         else:
-            scores.append(LABEL_SEVERITY.get(il, 0.0) * ic)
-        weights.append(AGENT_WEIGHTS["image"])
+            scores.append(severity.get(il, 0.0) * ic)
+        weights.append(agent_weights["image"])
         min_conf = min(min_conf, ic)
 
     if multimodal_result:
         ml = multimodal_result.get("label", "safe")
         mc = multimodal_result.get("confidence", 0.5)
-        scores.append(LABEL_SEVERITY.get(ml, 0.5) * mc)
-        weights.append(AGENT_WEIGHTS["multimodal"])
+        scores.append(severity.get(ml, 0.5) * mc)
+        weights.append(agent_weights["multimodal"])
         min_conf = min(min_conf, mc)
 
     if not scores:
@@ -191,7 +176,7 @@ def _aggregate_signals(text_result: dict | None, image_result: dict,
     weighted_score = sum(s * w for s, w in zip(scores, norm_weights))
 
     # Convert score back to label + confidence
-    label, confidence = _score_to_label(weighted_score, min_conf)
+    label, confidence = _score_to_label(weighted_score, min_conf, cfg)
 
     # Determine tier from which agent was the final authority
     tier = text_result.get("tier", "L3_llm") if text_result else "decision"
@@ -199,21 +184,19 @@ def _aggregate_signals(text_result: dict | None, image_result: dict,
     return label, confidence, tier
 
 
-def _score_to_label(score: float, min_confidence: float) -> tuple[str, float]:
-    """Convert a continuous severity score back to a discrete label.
+def _score_to_label(score: float, min_confidence: float, cfg: dict) -> tuple[str, float]:
+    """Convert severity score to discrete label using configurable thresholds."""
+    thresholds = cfg.get("score_thresholds", {})
 
-    score range: 0.0 (safe) to 1.0 (politics). Confidence is the minimum
-    confidence across all contributing agents (conservative estimate).
-    """
-    if score >= 0.85:
-        return "politics" if score >= 0.95 else "violence", min_confidence
-    elif score >= 0.65:
+    if score >= thresholds.get("politics", 0.85):
+        return "politics" if score >= thresholds.get("politics", 0.95) else "violence", min_confidence
+    elif score >= thresholds.get("porn", 0.65):
         return "porn", min_confidence
-    elif score >= 0.45:
+    elif score >= thresholds.get("gambling", 0.45):
         return "gambling", min_confidence
-    elif score >= 0.25:
+    elif score >= thresholds.get("toxic", 0.25):
         return "toxic", min_confidence
-    elif score >= 0.10:
+    elif score >= thresholds.get("spam", 0.10):
         return "spam", min_confidence
     else:
         return "safe", min_confidence
