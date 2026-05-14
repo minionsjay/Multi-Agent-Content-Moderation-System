@@ -2,199 +2,238 @@
 """
 Pre-download all models for offline deployment.
 
-Run this ONCE on a machine with internet access. It downloads all
-HuggingFace models to the local cache (~/.cache/huggingface/hub/).
-Then copy the entire cache to the offline machine.
+Run this ONCE on a machine with internet access. Models are saved to
+the HuggingFace cache (~/.cache/huggingface/hub/) by default, or to
+./models/ when --local is used.
 
 Usage:
-  python download_models.py              # download all models
-  python download_models.py --text-only  # skip image/OptionalCR models
-  python download_models.py --llm-only   # only download LLM (GGUF)
+  python download_models.py              # download text-only models
+  python download_models.py --all        # download ALL models (large)
+  python download_models.py --local      # save to ./models/ (portable)
+  python download_models.py --llm        # also download LLM models
 
 Downloads:
   1. KoalaAI/Text-Moderation          (~400MB)  L2 BERT safety classifier
   2. BAAI/bge-small-zh-v1.5           (~95MB)   text embeddings
-  3. EasyOCR (ch_sim + en)            (~450MB)  image text extraction (optional)
-  4. Falconsai/nsfw_image_detection   (~350MB)  image NSFW classifier (optional)
+  3. Qwen/Qwen3Guard-Gen-0.6B         (~1.2GB) L3 safety classifier (optional)
+  4. Qwen/Qwen2.5-1.5B-Instruct       (~3GB)   L3 general LLM (optional)
+  5. EasyOCR (ch_sim + en)            (~450MB)  image text extraction (optional)
+  6. Falconsai/nsfw_image_detection   (~350MB)  image NSFW classifier (optional)
 
-After download, pack the cache:
-  tar -czf hf_cache.tar.gz -C ~/.cache/huggingface hub/
-  tar -czf easyocr.tar.gz -C ~/.EasyOCR model/
+After download, use HF_LOCAL_FILES_ONLY=true in .env to prevent auto-downloads.
 """
 
 import sys
 import os
 import time
 import argparse
-import subprocess
 
 
-def download_bert():
-    """L2 BERT: KoalaAI/Text-Moderation (9-label safety classifier)."""
-    print("=" * 50)
-    print("[1/4] KoalaAI/Text-Moderation (L2 BERT)")
-    print("=" * 50)
-    from transformers import pipeline
+def download_model(model_id: str, label: str, save_dir: str | None = None):
+    """Download a HuggingFace model (text classification or embedding)."""
+    print(f"\n{'='*50}")
+    print(f"[{label}] {model_id}")
+    print(f"{'='*50}")
+
+    from transformers import AutoTokenizer, AutoModel
+
     t0 = time.perf_counter()
-    pipe = pipeline("text-classification", model="KoalaAI/Text-Moderation")
-    print(f"  ✓ Downloaded in {time.perf_counter() - t0:.0f}s")
-    return True
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        model = AutoModel.from_pretrained(model_id, trust_remote_code=True)
+
+        if save_dir:
+            local_path = os.path.join(save_dir, model_id.replace("/", "--"))
+            tokenizer.save_pretrained(local_path)
+            model.save_pretrained(local_path)
+            print(f"  ✓ Saved to {local_path}")
+        else:
+            print(f"  ✓ Cached in ~/.cache/huggingface/")
+
+        params = sum(p.numel() for p in model.parameters())
+        elapsed = time.perf_counter() - t0
+        print(f"  ✓ {params/1e6:.0f}M params, {elapsed:.0f}s")
+        return True
+    except Exception as e:
+        print(f"  ✗ Failed: {e}")
+        return False
 
 
-def download_embedding():
-    """BGE-small-zh-v1.5: text embeddings, 512-dim."""
-    print("\n" + "=" * 50)
-    print("[2/4] BAAI/bge-small-zh-v1.5 (Embedding)")
-    print("=" * 50)
+def download_causal_lm(model_id: str, label: str, save_dir: str | None = None):
+    """Download a CausalLM model (Qwen3Guard, Qwen2.5, etc.)."""
+    print(f"\n{'='*50}")
+    print(f"[{label}] {model_id}")
+    print(f"{'='*50}")
+
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+
+    t0 = time.perf_counter()
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype="auto",
+            device_map="auto",
+            trust_remote_code=True,
+        )
+
+        if save_dir:
+            local_path = os.path.join(save_dir, model_id.replace("/", "--"))
+            tokenizer.save_pretrained(local_path)
+            model.save_pretrained(local_path)
+            print(f"  ✓ Saved to {local_path}")
+        else:
+            print(f"  ✓ Cached in ~/.cache/huggingface/")
+
+        params = sum(p.numel() for p in model.parameters())
+        elapsed = time.perf_counter() - t0
+        print(f"  ✓ {params/1e9:.2f}B params, {elapsed:.0f}s")
+        return True
+    except Exception as e:
+        print(f"  ✗ Failed: {e}")
+        return False
+
+
+def download_embedding(model_id: str, label: str, save_dir: str | None = None):
+    """Download SentenceTransformer embedding model."""
+    print(f"\n{'='*50}")
+    print(f"[{label}] {model_id}")
+    print(f"{'='*50}")
+
     from sentence_transformers import SentenceTransformer
+
     t0 = time.perf_counter()
-    model = SentenceTransformer("BAAI/bge-small-zh-v1.5")
-    dim = model.get_sentence_embedding_dimension()
-    print(f"  ✓ Downloaded in {time.perf_counter() - t0:.0f}s (dim={dim})")
-    return True
+    try:
+        model = SentenceTransformer(model_id)
+        dim = model.get_sentence_embedding_dimension()
+
+        if save_dir:
+            local_path = os.path.join(save_dir, model_id.replace("/", "--"))
+            model.save(local_path)
+            print(f"  ✓ Saved to {local_path}")
+        else:
+            print(f"  ✓ Cached in ~/.cache/huggingface/")
+
+        elapsed = time.perf_counter() - t0
+        print(f"  ✓ dim={dim}, {elapsed:.0f}s")
+        return True
+    except Exception as e:
+        print(f"  ✗ Failed: {e}")
+        return False
+
+
+def download_pipeline(model_id: str, task: str, label: str, save_dir: str | None = None):
+    """Download a transformers pipeline model (e.g. NSFW ViT)."""
+    print(f"\n{'='*50}")
+    print(f"[{label}] {model_id}")
+    print(f"{'='*50}")
+
+    from transformers import pipeline
+
+    t0 = time.perf_counter()
+    try:
+        pipe = pipeline(task, model=model_id)
+
+        if save_dir:
+            local_path = os.path.join(save_dir, model_id.replace("/", "--"))
+            pipe.save_pretrained(local_path)
+            print(f"  ✓ Saved to {local_path}")
+        else:
+            print(f"  ✓ Cached in ~/.cache/huggingface/")
+
+        elapsed = time.perf_counter() - t0
+        print(f"  ✓ {elapsed:.0f}s")
+        return True
+    except Exception as e:
+        print(f"  ✗ Failed: {e}")
+        return False
 
 
 def download_easyocr():
     """EasyOCR: Chinese + English text extraction from images."""
-    print("\n" + "=" * 50)
-    print("[3/4] EasyOCR (ch_sim + en)")
-    print("=" * 50)
+    model_id = "EasyOCR (ch_sim + en)"
+    print(f"\n{'='*50}")
+    print(f"[OCR] {model_id}")
+    print(f"{'='*50}")
     try:
         import easyocr
         t0 = time.perf_counter()
         reader = easyocr.Reader(["ch_sim", "en"], gpu=False)
-        print(f"  ✓ Downloaded in {time.perf_counter() - t0:.0f}s")
+        elapsed = time.perf_counter() - t0
+        print(f"  ✓ {elapsed:.0f}s")
         return True
     except ImportError:
-        print("  ⚠ easyocr not installed — skipping. Install: pip install easyocr")
+        print("  ! easyocr not installed. Install: pip install easyocr")
         return False
 
 
-def download_nsfw():
-    """NSFW ViT: Falconsai/nsfw_image_detection."""
-    print("\n" + "=" * 50)
-    print("[4/4] Falconsai/nsfw_image_detection (NSFW ViT)")
+def main():
+    parser = argparse.ArgumentParser(description="Download all models for offline deployment")
+    parser.add_argument("--all", action="store_true", help="Download ALL models including large LLMs")
+    parser.add_argument("--llm", action="store_true", help="Also download LLM models (Qwen3Guard + Qwen2.5)")
+    parser.add_argument("--text-only", action="store_true", help="Only text models (BERT + Embedding)")
+    parser.add_argument("--local", action="store_true", help="Save models to ./models/ instead of HF cache")
+    args = parser.parse_args()
+
+    save_dir = os.path.abspath("models") if args.local else None
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+
     print("=" * 50)
-    from transformers import pipeline
-    t0 = time.perf_counter()
-    try:
-        pipe = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
-        print(f"  ✓ Downloaded in {time.perf_counter() - t0:.0f}s")
-        return True
-    except Exception as e:
-        print(f"  ⚠ Failed: {e}")
-        return False
-
-
-def download_llm():
-    """Download Qwen2.5-1.5B GGUF for local LLM (optional)."""
-    print("\n" + "=" * 50)
-    print("[LLM] Qwen2.5-1.5B-Instruct GGUF Q4_K_M")
+    print("MODEL DOWNLOADER")
     print("=" * 50)
+    print(f"Save mode: {'./models/' if save_dir else 'HF cache (~/.cache/huggingface/)'}")
+    print(f"Scope: {'ALL' if args.all else 'LLM included' if args.llm else 'text-only' if args.text_only else 'text essential'}")
 
-    url = ("https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/"
-           "resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf")
-    dest = "models/qwen2.5-1.5b.gguf"
+    results = {}
 
-    if os.path.exists(dest):
-        size_mb = os.path.getsize(dest) / 1024 / 1024
-        print(f"  ✓ Already exists: {size_mb:.0f}MB")
-        return True
+    if not args.text_only:
+        # Essential: BERT + Embedding
+        results["BERT (KoalaAI)"] = download_model(
+            "KoalaAI/Text-Moderation", "BERT", save_dir,
+        )
+        results["Embedding (BGE)"] = download_embedding(
+            "BAAI/bge-small-zh-v1.5", "Embedding", save_dir,
+        )
 
-    os.makedirs("models", exist_ok=True)
+    if args.all or args.llm:
+        results["Qwen3Guard (0.6B)"] = download_causal_lm(
+            "Qwen/Qwen3Guard-Gen-0.6B", "LLM", save_dir,
+        )
+        results["Qwen2.5 (1.5B)"] = download_causal_lm(
+            "Qwen/Qwen2.5-1.5B-Instruct", "LLM", save_dir,
+        )
 
-    try:
-        import urllib.request
-        print(f"  Downloading ~1GB...")
-        t0 = time.perf_counter()
-        urllib.request.urlretrieve(url, dest)
-        elapsed = time.perf_counter() - t0
-        size_mb = os.path.getsize(dest) / 1024 / 1024
-        print(f"  ✓ Downloaded {size_mb:.0f}MB in {elapsed:.0f}s")
-        return True
-    except Exception as e:
-        print(f"  ⚠ Download failed: {e}")
-        print(f"  Manual download: wget {url} -O {dest}")
-        return False
+    if args.all:
+        results["NSFW ViT"] = download_pipeline(
+            "Falconsai/nsfw_image_detection", "image-classification", "NSFW", save_dir,
+        )
+        results["EasyOCR"] = download_easyocr()
 
-
-def print_summary(results):
-    """Print download summary and pack instructions."""
-    print("\n" + "=" * 50)
-    print("DOWNLOAD SUMMARY")
+    # Summary
+    print(f"\n{'='*50}")
+    print("SUMMARY")
     print("=" * 50)
     for name, ok in results.items():
         print(f"  {'✓' if ok else '✗'} {name}")
 
-    print(f"""
-=============================================
-PACK FOR OFFLINE DEPLOYMENT
-=============================================
+    if save_dir:
+        print(f"\nModels saved to: {save_dir}")
+        print(f"Total size: ", end="")
+        total = 0
+        for root, dirs, files in os.walk(save_dir):
+            for f in files:
+                total += os.path.getsize(os.path.join(root, f))
+        print(f"{total/1024**3:.1f} GB")
+        print(f"\nSet these in .env:")
+        print(f"  BERT_MODEL=./models/KoalaAI--Text-Moderation")
+        print(f"  EMBED_MODEL=./models/BAAI--bge-small-zh-v1.5")
+        if args.all or args.llm:
+            print(f"  QWEN_GUARD_MODEL=./models/Qwen--Qwen3Guard-Gen-0.6B")
+            print(f"  TRANSFORMERS_LLM_MODEL=./models/Qwen--Qwen2.5-1.5B-Instruct")
+        print(f"  HF_LOCAL_FILES_ONLY=true")
 
-# 1. Pack HuggingFace models
-tar -czf hf_cache.tar.gz -C ~/.cache/huggingface hub/
-
-# 2. Pack EasyOCR (if downloaded)
-tar -czf easyocr.tar.gz -C ~/.EasyOCR model/
-
-# 3. Pack LLM (if downloaded)
-cp models/qwen2.5-1.5b.gguf . 2>/dev/null
-
-# 4. Pack pip packages
-mkdir -p offline_packages
-pip download -r requirements.txt -d offline_packages/
-# (uncomment next line if using local LLM)
-# pip download llama-cpp-python -d offline_packages/
-
-=============================================
-ON OFFLINE TARGET MACHINE
-=============================================
-
-# 1. Extract models
-tar -xzf hf_cache.tar.gz -C ~/.cache/huggingface/
-tar -xzf easyocr.tar.gz -C ~/.EasyOCR/
-mkdir -p models && mv qwen2.5-1.5b.gguf models/
-
-# 2. Install packages
-pip install --no-index --find-links offline_packages/ -r requirements.txt
-
-# 3. Configure
-cp .env.example .env
-# Edit .env: set LLM_PROVIDER=local (or keep deepseek for API)
-
-# 4. Verify
-python check_env.py
-
-# 5. Start
-python -m src.api
-""")
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Pre-download all models for offline deployment")
-    parser.add_argument("--text-only", action="store_true", help="Skip image models (OCR, NSFW)")
-    parser.add_argument("--llm-only", action="store_true", help="Only download LLM GGUF")
-    parser.add_argument("--llm", action="store_true", help="Also download LLM GGUF")
-    args = parser.parse_args()
-
-    results = {}
-
-    if args.llm_only:
-        results["LLM GGUF"] = download_llm()
-        print_summary(results)
-        return
-
-    results["BERT (KoalaAI)"] = download_bert()
-    results["Embedding (BGE)"] = download_embedding()
-
-    if not args.text_only:
-        results["EasyOCR"] = download_easyocr()
-        results["NSFW ViT"] = download_nsfw()
-
-    if args.llm:
-        results["LLM GGUF"] = download_llm()
-
-    print_summary(results)
+    print(f"\nDone. Set HF_LOCAL_FILES_ONLY=true in .env to prevent further downloads.")
 
 
 if __name__ == "__main__":

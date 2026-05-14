@@ -30,7 +30,8 @@ data/bench_100_results.json
 data/bench_100.jsonl
 
 # Models (large binary files)
-models/
+models/*
+!models/README.md
 onnx_models/
 *.gguf
 *.bin

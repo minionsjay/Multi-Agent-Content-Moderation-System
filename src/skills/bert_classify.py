@@ -1,6 +1,6 @@
 import logging
 import concurrent.futures
-from src.config import BERT_MODEL, BERT_HIGH_CONFIDENCE, BERT_LOW_CONFIDENCE
+from src.config import BERT_MODEL, BERT_HIGH_CONFIDENCE, BERT_LOW_CONFIDENCE, HF_LOCAL_FILES_ONLY
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,7 @@ class BERTClassifier:
                     tokenizer=self.model_name,
                     truncation=True,
                     max_length=512,
+                    local_files_only=HF_LOCAL_FILES_ONLY,
                 )
                 self._pipeline = future.result(timeout=BERT_LOAD_TIMEOUT)
             # Count layers in a model-agnostic way (handles BERT, RoBERTa, XLM-RoBERTa, etc.)

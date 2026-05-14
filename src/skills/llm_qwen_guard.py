@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import time
+from src.config import HF_LOCAL_FILES_ONLY
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +68,13 @@ class QwenGuardAuditor:
 
             self._tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,
+                local_files_only=HF_LOCAL_FILES_ONLY,
             )
             self._model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 torch_dtype="auto",
                 device_map="auto",
+                local_files_only=HF_LOCAL_FILES_ONLY,
             )
 
             self._load_time_s = time.perf_counter() - t0

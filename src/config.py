@@ -62,6 +62,10 @@ BERT_MODEL = os.getenv(
 )
 BERT_ENABLED = os.getenv("BERT_ENABLED", "true").lower() != "false"
 
+# Set true to only use locally cached models (no HuggingFace downloads)
+# Set false to allow auto-downloading models from HuggingFace Hub
+HF_LOCAL_FILES_ONLY = os.getenv("HF_LOCAL_FILES_ONLY", "true").lower() != "false"
+
 # Embedding model (sentence-transformers)
 EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-small-zh-v1.5")
 

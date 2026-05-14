@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import time
+from src.config import HF_LOCAL_FILES_ONLY
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +89,13 @@ class TransformersLLMAuditor:
             self._tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,
                 trust_remote_code=True,
+                local_files_only=HF_LOCAL_FILES_ONLY,
             )
 
             # Build loading kwargs
             load_kwargs = {
                 "trust_remote_code": True,
+                "local_files_only": HF_LOCAL_FILES_ONLY,
                 "torch_dtype": torch.float16 if torch.cuda.is_available() else torch.float32,
             }
 
