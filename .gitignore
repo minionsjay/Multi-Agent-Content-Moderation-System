@@ -32,10 +32,13 @@ data/bench_100.jsonl
 # Models (large binary files)
 models/*
 !models/README.md
+!models/BAAI--bge-small-zh-v1.5/
+!models/BAAI--bge-small-zh-v1.5/**
 onnx_models/
 *.gguf
 *.bin
 *.safetensors
+!models/BAAI--bge-small-zh-v1.5/model.safetensors
 
 # Test images (generated)
 research/hot_path_bench/08_image_dhash/test_images/
