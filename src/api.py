@@ -19,6 +19,12 @@ from src.skills.embedder import embedder
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("api")
 
+# Suppress noisy third-party loggers
+logging.getLogger("jieba").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 app = FastAPI(title="Content Moderation POC", version="0.5.0")
 
 
@@ -28,6 +34,13 @@ async def startup_warmup():
     import logging
     log = logging.getLogger("startup")
     t0 = time.perf_counter()
+
+    # Pre-check Redis availability (avoid 150ms timeout on first request)
+    try:
+        from src.skills.redis_cache import redis_cache
+        redis_cache._ensure_client()
+    except Exception:
+        pass
 
     # Warm BERT (transformers pipeline)
     try:

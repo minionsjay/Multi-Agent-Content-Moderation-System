@@ -1249,6 +1249,8 @@ async function uploadBatch(file) {
   document.getElementById('progLabel').textContent = '0 / 0';
   document.getElementById('progPct').textContent = '0%';
 
+  // Clear previous state
+  for (const k in _batchResultMap) delete _batchResultMap[k];
   // Show empty table
   showBatch({total:0, passed:0, blocked:0, reviewed:0, avg_latency_ms:0, llm_call_rate:0, hot_path_rate:0, tier_distribution:{}, results:[]});
 
@@ -1290,7 +1292,7 @@ async function uploadBatch(file) {
           } else if (data.event === 'error') {
             throw new Error(data.error || 'Unknown error');
           }
-        } catch(e) {}
+        } catch(e) { console.error('Batch stream error:', e); }
       }
     }
   } catch(e) {

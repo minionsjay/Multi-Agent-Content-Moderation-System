@@ -50,8 +50,8 @@ class RedisCache:
             import redis
             self._client = redis.Redis.from_url(
                 self.redis_url,
-                socket_timeout=0.5,          # 500ms timeout
-                socket_connect_timeout=0.3,  # 300ms connect timeout
+                socket_timeout=0.1,           # 100ms
+                socket_connect_timeout=0.05,  # 50ms connect timeout
                 decode_responses=True,
             )
             self._client.ping()
