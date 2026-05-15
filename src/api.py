@@ -42,6 +42,41 @@ async def startup_warmup():
     except Exception:
         pass
 
+    # Pre-load embedder (BGE-small-zh, ~92MB, avoids delay on first embed)
+    try:
+        from src.skills.embedder import embedder
+        log.info("Warming embedder (%s)...", embedder._model_name)
+        _ = embedder.embed("warmup")
+        log.info("Embedder warmed up (dim=%d)", embedder.DIM)
+    except Exception as e:
+        log.warning("Embedder warmup failed: %s", e)
+
+    # Pre-build jieba dictionary (avoids "Building prefix dict" on first request)
+    try:
+        import jieba
+        _ = list(jieba.cut("预热"))
+        log.info("jieba tokenizer ready")
+    except Exception as e:
+        log.warning("jieba warmup failed: %s", e)
+
+    # Pre-load keyword filter AC automaton + jieba (already loaded in __init__,
+    # but trigger jieba context validation to cache the dictionary)
+    try:
+        from src.skills.keyword_filter import keyword_filter
+        keyword_filter.match("预热测试")
+        log.info("Keyword filter ready (%d categories, %d combos)",
+                len(keyword_filter.keywords), len(keyword_filter.combos))
+    except Exception as e:
+        log.warning("Keyword filter warmup failed: %s", e)
+
+    # Pre-init ChromaDB collection (avoids disk I/O on first cache lookup)
+    try:
+        from src.skills.vector_cache import vector_cache
+        vector_cache._ensure_collection()
+        log.info("ChromaDB ready (%d docs in cache)", vector_cache.count())
+    except Exception as e:
+        log.warning("ChromaDB warmup failed: %s", e)
+
     # Warm BERT (transformers pipeline)
     try:
         from src.skills.bert_classify import bert_classifier
