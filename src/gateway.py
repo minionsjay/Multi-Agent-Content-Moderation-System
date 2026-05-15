@@ -279,17 +279,18 @@ class Gateway:
                  kw_label: str | None = None,
                  kw_confidence: float = 0.0) -> dict:
         # Write to L0 memory cache so next identical request hits instantly
-        # Extract the text from the last trace's input
-        if traces:
-            text = traces[-1].get("input", "")
-            if text and text.strip():
-                memory_cache.set(
-                    text,
-                    decision.get("decision", "pass"),
-                    decision.get("confidence", 1.0),
-                    decision.get("reason", ""),
-                    decision.get("tier", ""),
-                )
+        text = traces[-1].get("input", "") if traces else ""
+        if text and text.strip():
+            memory_cache.set(
+                text,
+                decision.get("decision", "pass"),
+                decision.get("confidence", 1.0),
+                decision.get("reason", ""),
+                decision.get("tier", ""),
+            )
+            # Fire-and-forget: also write to L1 ChromaDB so semantically
+            # similar content hits in future batches (runs in background)
+            self._cache_chroma_async(text, decision)
         return {
             "decision": decision,
             "traces": traces,
@@ -297,6 +298,28 @@ class Gateway:
             "keyword_label": kw_label,
             "keyword_confidence": kw_confidence,
         }
+
+    @staticmethod
+    def _cache_chroma_async(text: str, decision: dict):
+        """Write hot-path result to ChromaDB in a background thread."""
+        import threading
+
+        def _store():
+            try:
+                vec = embedder.embed(text)
+                vector_cache.store(
+                    embedding=vec,
+                    text=text,
+                    decision=decision.get("decision", "pass"),
+                    confidence=decision.get("confidence", 1.0),
+                    reason=decision.get("reason", ""),
+                    tier=decision.get("tier", ""),
+                )
+            except Exception:
+                pass  # ChromaDB write failure shouldn't affect the hot path
+
+        t = threading.Thread(target=_store, daemon=True)
+        t.start()
 
     def _escalate(self, traces: list,
                   keyword_prefiltered: bool,
