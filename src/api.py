@@ -502,6 +502,36 @@ async def moderate_batch_stream(file: UploadFile = File(...)):
                 _inflight[key].set()
                 return resp
             async with llm_sem:
+                # Re-check ChromaDB: a previous item with similar text may
+                # have just finished and written to cache
+                try:
+                    vec = await asyncio.to_thread(embedder.embed, text)
+                    cached = vector_cache.lookup(vec)
+                    if cached:
+                        cached["tier"] = cached.get("tier", "L1_chroma_recheck")
+                        resp = {
+                            "content_id": item["id"],
+                            "decision": cached.get("decision", "pass"),
+                            "confidence": cached.get("confidence", 1.0),
+                            "reason": cached.get("reason", "Semantic cache hit (batch recheck)"),
+                            "tier": cached.get("tier", "L1_chroma"),
+                            "latency_ms": round((time.perf_counter() - t_item) * 1000, 2),
+                            "traces": [{
+                                "node": "batch", "step": "L1_chroma_recheck",
+                                "model": "ChromaDB · batch dedup",
+                                "input": text[:200],
+                                "output": {"cached": True, "decision": cached.get("decision")},
+                                "latency_ms": 0, "cost": "zero",
+                                "ts": int(time.time() * 1000),
+                            }] + gw["traces"],
+                            "path": "hot",
+                        }
+                        _inflight_results[key] = resp
+                        _inflight[key].set()
+                        return resp
+                except Exception:
+                    pass  # recheck failure shouldn't block processing
+
                 state = _make_state(
                     ModerationRequest(content_id=item["id"], text=text),
                     text, gw)
