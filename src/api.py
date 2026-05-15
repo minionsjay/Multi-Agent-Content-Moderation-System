@@ -453,10 +453,40 @@ async def moderate_batch_stream(file: UploadFile = File(...)):
     total = len(texts)
     sem = asyncio.Semaphore(1)
 
+    # In-flight dedup: same text within one batch shares one result
+    import hashlib
+    _inflight: dict[str, asyncio.Event] = {}
+    _inflight_results: dict[str, dict] = {}
+
+    def _text_key(text: str) -> str:
+        return hashlib.sha256(text.encode()).hexdigest()
+
     async def process_one(item):
         t_item = time.perf_counter()
+        text = item["text"]
+        key = _text_key(text)
+
+        # Check if same text is already being processed or done in this batch
+        if key in _inflight:
+            await _inflight[key].wait()
+            cached = dict(_inflight_results[key])
+            cached["content_id"] = item["id"]
+            cached["latency_ms"] = round((time.perf_counter() - t_item) * 1000, 2)
+            cached["traces"] = [{
+                "node": "batch", "step": "inflight_dedup",
+                "model": "SHA256 · in-flight",
+                "input": text[:200],
+                "output": {"dedup": True, "shared_with": cached.get("content_id", "?")},
+                "latency_ms": cached["latency_ms"], "cost": "zero",
+                "ts": int(time.time() * 1000),
+            }] + cached.get("traces", [])
+            cached["tier"] = cached.get("tier", "inflight_dedup")
+            return cached
+
+        _inflight[key] = asyncio.Event()
+
         try:
-            gw = gateway.check(item["text"], item.get("image_url", ""))
+            gw = gateway.check(text, item.get("image_url", ""))
             if gw["decision"] is not None:
                 resp = dict(gw["decision"])
                 resp["content_id"] = item["id"]
@@ -465,28 +495,34 @@ async def moderate_batch_stream(file: UploadFile = File(...)):
                 resp["latency_ms"] = round((time.perf_counter() - t_item) * 1000, 2)
                 if "tier" not in resp:
                     resp["tier"] = gw["decision"].get("tier", "cached")
+                _inflight_results[key] = resp
+                _inflight[key].set()
                 return resp
             async with sem:
                 state = _make_state(
-                    ModerationRequest(content_id=item["id"], text=item["text"]),
-                    item["text"], gw)
+                    ModerationRequest(content_id=item["id"], text=text),
+                    text, gw)
                 result = await graph.ainvoke(state)
                 resp = _format_response(item["id"], result, time.perf_counter() - t_item, "cold")
                 resp["traces"] = gw["traces"] + resp["traces"]
+                _inflight_results[key] = resp
+                _inflight[key].set()
                 return resp
         except Exception as e:
             logger.error("Batch item %s failed: %s", item.get("id", "?"), e)
-            return {
+            err_resp = {
                 "content_id": item.get("id", "?"), "decision": "error",
                 "confidence": 0.0, "reason": f"Processing error: {e}",
                 "tier": "error",
                 "latency_ms": round((time.perf_counter() - t_item) * 1000, 2),
                 "traces": [], "path": "error",
             }
+            _inflight_results[key] = err_resp
+            _inflight[key].set()
+            return err_resp
 
     async def event_stream():
         completed = 0
-        # Process items as they complete, yield progress events
         tasks = [process_one(t) for t in texts]
         for coro in asyncio.as_completed(tasks):
             r = await coro
@@ -503,10 +539,7 @@ async def moderate_batch_stream(file: UploadFile = File(...)):
                 "elapsed_ms": round((time.perf_counter() - t0) * 1000, 0),
             })
 
-        # Build final summary
         elapsed = (time.perf_counter() - t0) * 1000
-        # Gather all results for summary (re-process, they were already yielded)
-        # We compute summary from the last known state
         yield _sse_event("done", {
             "total": total,
             "elapsed_ms": round(elapsed, 0),
