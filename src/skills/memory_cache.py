@@ -4,9 +4,10 @@ L0 In-Memory Cache — exact text hash lookup in < 0.01ms.
 Sits BEFORE ChromaDB (L1). Catches exact duplicate texts instantly.
 Uses TTLCache with 1-hour TTL, max 100K entries (~50MB memory).
 
-Persistence: saves to ./data/memory_cache.json on each write. Survives restarts.
+Persistence: saves to ./data/memory_cache.json every 100 writes and on shutdown.
 """
 
+import atexit
 import hashlib
 import json
 import logging
@@ -16,6 +17,7 @@ from cachetools import TTLCache
 logger = logging.getLogger(__name__)
 
 MEMORY_CACHE_PATH = os.getenv("MEMORY_CACHE_PATH", "./data/memory_cache.json")
+SAVE_INTERVAL = 100  # save to disk every N writes (not every write)
 
 
 class MemoryCache:
@@ -24,7 +26,9 @@ class MemoryCache:
         self.hits = 0
         self.misses = 0
         self._path = MEMORY_CACHE_PATH
+        self._writes_since_save = 0
         self._load()
+        atexit.register(self._save)
 
     def _key(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -51,12 +55,13 @@ class MemoryCache:
             logger.warning("Failed to load memory cache from %s: %s", self._path, e)
 
     def _save(self):
-        """Dump cache to disk as JSON."""
+        """Dump cache to disk as JSON. Called periodically and on shutdown."""
         try:
             os.makedirs(os.path.dirname(self._path), exist_ok=True)
             data = dict(self._store)
             with open(self._path, "w") as f:
                 json.dump(data, f, ensure_ascii=False)
+            self._writes_since_save = 0
         except Exception as e:
             logger.warning("Failed to save memory cache: %s", e)
 
@@ -82,6 +87,12 @@ class MemoryCache:
             "reason": reason,
             "tier": tier,
         }
+        self._writes_since_save += 1
+        if self._writes_since_save >= SAVE_INTERVAL:
+            self._save()
+
+    def flush(self):
+        """Force save to disk immediately."""
         self._save()
 
     def clear(self):
@@ -89,6 +100,7 @@ class MemoryCache:
         self._store.clear()
         self.hits = 0
         self.misses = 0
+        self._writes_since_save = 0
         try:
             if os.path.exists(self._path):
                 os.remove(self._path)
