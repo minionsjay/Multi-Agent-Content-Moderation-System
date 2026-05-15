@@ -451,7 +451,8 @@ async def moderate_batch_stream(file: UploadFile = File(...)):
         )
 
     total = len(texts)
-    sem = asyncio.Semaphore(1)
+    llm_sem = asyncio.Semaphore(1)     # LLM rate limit
+    gw_sem = asyncio.Semaphore(4)      # limit concurrent gateway checks (embedder GIL)
 
     # In-flight dedup: same text within one batch shares one result
     import hashlib
@@ -486,8 +487,9 @@ async def moderate_batch_stream(file: UploadFile = File(...)):
         _inflight[key] = asyncio.Event()
 
         try:
-            # Run in thread to avoid blocking event loop (embedder is CPU-bound)
-            gw = await asyncio.to_thread(gateway.check, text, item.get("image_url", ""))
+            # Run in thread with semaphore to limit GIL contention (embedder is CPU-bound)
+            async with gw_sem:
+                gw = await asyncio.to_thread(gateway.check, text, item.get("image_url", ""))
             if gw["decision"] is not None:
                 resp = dict(gw["decision"])
                 resp["content_id"] = item["id"]
@@ -499,7 +501,7 @@ async def moderate_batch_stream(file: UploadFile = File(...)):
                 _inflight_results[key] = resp
                 _inflight[key].set()
                 return resp
-            async with sem:
+            async with llm_sem:
                 state = _make_state(
                     ModerationRequest(content_id=item["id"], text=text),
                     text, gw)
@@ -559,13 +561,15 @@ async def moderate_batch(file: UploadFile = File(...)):
     if not texts:
         return {"error": "No valid texts found in file", "total": 0}
 
-    sem = asyncio.Semaphore(1)  # limit LLM concurrency to avoid rate limits
+    llm_sem = asyncio.Semaphore(1)  # limit LLM concurrency to avoid rate limits
+    gw_sem = asyncio.Semaphore(4)   # limit concurrent gateway checks (embedder GIL)
 
     async def process_one(item):
         t_item = time.perf_counter()
         try:
-            # Run in thread to avoid blocking event loop
-            gw = await asyncio.to_thread(gateway.check, item["text"], item.get("image_url", ""))
+            # Run in thread with semaphore to limit GIL contention
+            async with gw_sem:
+                gw = await asyncio.to_thread(gateway.check, item["text"], item.get("image_url", ""))
             if gw["decision"] is not None:
                 resp = dict(gw["decision"])
                 resp["content_id"] = item["id"]
@@ -577,7 +581,7 @@ async def moderate_batch(file: UploadFile = File(...)):
                     resp["tier"] = gw["decision"].get("tier", "cached")
                 return resp
             # Cold path — semaphore protects LLM call
-            async with sem:
+            async with llm_sem:
                 state = _make_state(
                     ModerationRequest(content_id=item["id"], text=item["text"]),
                     item["text"], gw)
