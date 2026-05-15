@@ -486,7 +486,8 @@ async def moderate_batch_stream(file: UploadFile = File(...)):
         _inflight[key] = asyncio.Event()
 
         try:
-            gw = gateway.check(text, item.get("image_url", ""))
+            # Run in thread to avoid blocking event loop (embedder is CPU-bound)
+            gw = await asyncio.to_thread(gateway.check, text, item.get("image_url", ""))
             if gw["decision"] is not None:
                 resp = dict(gw["decision"])
                 resp["content_id"] = item["id"]
@@ -563,8 +564,8 @@ async def moderate_batch(file: UploadFile = File(...)):
     async def process_one(item):
         t_item = time.perf_counter()
         try:
-            # Gateway first (synchronous, no semaphore needed)
-            gw = gateway.check(item["text"], item.get("image_url", ""))
+            # Run in thread to avoid blocking event loop
+            gw = await asyncio.to_thread(gateway.check, item["text"], item.get("image_url", ""))
             if gw["decision"] is not None:
                 resp = dict(gw["decision"])
                 resp["content_id"] = item["id"]
